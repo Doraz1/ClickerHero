@@ -4,6 +4,7 @@ import time
 from moviepy.editor import *
 import pygame as pg
 import numpy as np
+import math
 
 
 class Button:
@@ -22,16 +23,38 @@ class Button:
         self.text = Button.FONT.render("{0}".format(text), True, Button.TEXT_COLOR)
         self.logic = logic
 
-    def draw_button(self):
+    def draw(self):
         pg.draw.rect(self.screen, Button.COLOR, self.pos)
         t_h = self.text.get_rect().height
         t_w = self.text.get_rect().width
         self.screen.blit(self.text,
-                         (self.pos[0] + 0.5*Button.WIDTH - 0.5*t_w, self.pos[1] + 0.5*Button.HEIGHT - 0.5*t_h))
+                         (self.pos[0] + 0.5 * Button.WIDTH - 0.5 * t_w, self.pos[1] + 0.5 * Button.HEIGHT - 0.5 * t_h))
 
     def logic(self):
         self.logic()
 
+
+class Label:
+    COLOR = (213, 213, 213)
+    WIDTH = 550
+    HEIGHT = 70
+    MARGIN_Y = 25
+    FONT = pg.font.SysFont("davidclm", 35)
+    # possible fonts that support hebrew characters: davidclm, alefregular, alef, tahoma
+    TEXT_COLOR = (151, 83, 0)
+
+    def __init__(self, screen, pos_x, pos_y, logic, text="", color=COLOR):
+        self.screen = screen
+        self.color = color
+        self.pos = [pos_x, pos_y, Button.WIDTH, Button.HEIGHT]  # x, y, width, height
+        self.text = Button.FONT.render("{0}".format(text), True, Button.TEXT_COLOR)
+
+    def draw(self):
+        pg.draw.rect(self.screen, Button.COLOR, self.pos)
+        t_h = self.text.get_rect().height
+        t_w = self.text.get_rect().width
+        self.screen.blit(self.text,
+                         (self.pos[0] + 0.5 * Label.WIDTH - 0.5 * t_w, self.pos[1] + 0.5 * Label.HEIGHT - 0.5 * t_h))
 
 class Game:
 
@@ -49,11 +72,12 @@ class Game:
         self.load_clip_window()
         self.play_clip(clip)
 
+
     def btn_exit_logic(self):
         self.run = False
 
     def btn_pause_logic(self):
-        pass
+        self.paused = True
 
     # endregion
 
@@ -64,6 +88,10 @@ class Game:
         self.height = height
         self.fullscreen = fullscreen
         self.buttons = []
+        self.robot_icons = []
+        self.score = 0
+        self.back_to_main = False # return to main menu after playing clip
+        self.paused = False # pause game
 
         size, flags = self.initialize_game_window()
         self.screen = pg.display.set_mode(size, flags)
@@ -98,7 +126,7 @@ class Game:
             self.handle_events()
             self.redraw_window()
             # TODO add self.iterate_clip in case clip is playing, else pass. This will require playing audio in main thread and not separate one, updating the pause button functionanlity
-            # TODO add preprocessing for video - fourier to get the fps
+            # TODO add preprocessing for video - fourier to get the BPM
 
         print("Exiting game")
         pg.quit()
@@ -108,18 +136,36 @@ class Game:
         self.screen.blit(BG_main_screen, (0, 0))
 
         buttons = []
-        # score_label = main_font.render(f"Score: 1555", 1, (255, 255, 255))
         screen_width, screen_height = self.screen.get_size()
-        initial_x, initial_y = (screen_width - Button.WIDTH)/2, 60  # first button coordinates
+        initial_x, initial_y = (screen_width - Button.WIDTH) / 2, 60  # first button coordinates
 
-        start_game_btn = Button(self.screen, initial_x, initial_y, self.btn_change_scrn_logic, self.hebrew("start Game"))
+        start_game_btn = Button(self.screen, initial_x, initial_y, self.btn_change_scrn_logic, self.hebrew("התחל משחק"))
         buttons.append(start_game_btn)
 
-        exit_btn = Button(self.screen, initial_x, initial_y + 1*(Button.HEIGHT + Button.MARGIN_Y),
-                          self.btn_exit_logic, self.hebrew("Exit"))
+        exit_btn = Button(self.screen, initial_x, initial_y + 1 * (Button.HEIGHT + Button.MARGIN_Y),
+                          self.btn_exit_logic, self.hebrew("יציאה"))
         buttons.append(exit_btn)
 
         self.active_screen = "Main menu screen"
+        self.buttons = buttons
+
+    def load_end_of_game_window(self):
+        self.clear_screen()
+        self.screen.blit(BG_main_screen, (0, 0))
+        buttons = []
+        screen_width, screen_height = self.screen.get_size()
+        initial_x, initial_y = (screen_width - Button.WIDTH) / 2, 60  # first button coordinates
+
+        back_to_main_btn = Button(self.screen, initial_x, initial_y + 1 * (Button.HEIGHT + Button.MARGIN_Y),
+                                  self.btn_back_to_main_logic, self.hebrew("חזרה לתפריט הראשי"))
+        buttons.append(back_to_main_btn)
+
+        score_label = main_font.render(self.hebrew(f"תוצאה סופית: {self.score}"), True, (100, 180, 255))
+        congrats_label = main_font.render(self.hebrew("כל הכבוד!!"), True, (100, 180, 255))
+
+        self.screen.blit(score_label, (470, 30))
+        self.screen.blit(congrats_label, (520, 60))
+        self.active_screen = "End-of-game screen"
         self.buttons = buttons
 
     def clear_screen(self):
@@ -146,7 +192,7 @@ class Game:
 
     def redraw_window(self):
         for btn in self.buttons:
-            btn.draw_button()
+            btn.draw()
 
         pg.display.update()
 
@@ -157,22 +203,22 @@ class Game:
         buttons = []
 
         screen_width, screen_height = self.screen.get_size()
-        initial_x, initial_y = (screen_width - Button.WIDTH)/2, 60  # first button coordinates
+        initial_x, initial_y = (screen_width - Button.WIDTH) / 2, 60  # first button coordinates
 
         song_name = "Take My Breath"
         start_game_btn = Button(self.screen, initial_x, initial_y,
                                 lambda: self.btn_start_game_logic(song_name), song_name)
         buttons.append(start_game_btn)
 
-        back_to_main_btn = Button(self.screen, initial_x, initial_y + 1*(Button.HEIGHT + Button.MARGIN_Y),
-                                  self.btn_back_to_main_logic, self.hebrew("Return to main menu"))
+        back_to_main_btn = Button(self.screen, initial_x, initial_y + 1 * (Button.HEIGHT + Button.MARGIN_Y),
+                                  self.btn_back_to_main_logic, self.hebrew("חזרה לתפריט הראשי"))
         buttons.append(back_to_main_btn)
 
         self.active_screen = "Choose song screen"
         self.buttons = buttons
 
-
     # region clip
+
     def load_clip(self, song_name, use_save=False, resize=False):
         song_dir_path = os.path.join(SONGS_PATH, song_name)
         song_path = os.path.join(song_dir_path, "{0}.mp4".format(song_name))
@@ -194,21 +240,23 @@ class Game:
         return clip_resized
 
     def load_clip_window(self):
+
         def redraw_window(screen):
-            score_label = main_font.render("Score: 1555", True, (255, 255, 255))
+            screen.blit(BG_clip_screen, (0, 0))
+            pg.draw.rect(screen, (255, 0, 0), pg.Rect(5, 15, 250, 70))
+            score_label = main_font.render("Score: 0", True, (255, 255, 255))
+
             screen.blit(score_label, (10, 30))
 
             for btn in self.buttons:
-                btn.draw_button()
+                btn.draw()
 
-            pg.display.update()
+            pg.display.flip()
 
-        self.clear_screen()
-        self.screen.blit(BG_clip_screen, (0, 0))
 
         buttons = []
-        pause_game_btn = Button(self.screen, 10, 10, self.btn_pause_logic, "Pause")
-        buttons.append(pause_game_btn)
+        # pause_game_btn = Button(self.screen, 10, 10, self.btn_pause_logic, "Pause")
+        # buttons.append(pause_game_btn)
 
         self.active_screen = "Clip screen"
         self.buttons = buttons
@@ -257,8 +305,10 @@ class Game:
             :return:
             """
             for event in pg.event.get():
-                if event.type == pg.QUIT or (event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE):
+                if event.type == pg.QUIT:
                     self.run = False
+                elif event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+                    self.back_to_main = True
 
                 # Button clicks
                 elif event.type == pg.MOUSEBUTTONDOWN:
@@ -268,6 +318,29 @@ class Game:
                         'Check if user pressed on a button'
                         if btn_x <= mouse_x <= btn_x + btn_width and btn_y <= mouse_y <= btn_y + btn_height:
                             btn.logic()
+
+        def redraw_window(screen, t, score):
+            t_tolerance = 1e-08
+            BPM = 120
+            period = BPM / 60 / 4
+            # FPS is about 44100, t is between 0.06666 till 1645333 jumps at 0.06666, rate is about 0.0000226
+            # This is a sequence that climbs up to 'period', with rate 'rate', and checks if we're 't_tolerance' close to its multiple
+            # print(t, period, t % period)
+
+
+
+            if math.isclose(t % period, 0, abs_tol=t_tolerance) or \
+                    math.isclose(period - (t % period), 0, abs_tol=t_tolerance):
+                print("equal rate!")
+                score += 100
+            # TODO transfer from song to main menu, add icon of turtlebot lighting up and add pause button
+            pg.draw.rect(screen, (255, 0, 0), pg.Rect(5, 15, 250, 70))
+            pg.display.flip()
+            score_label = main_font.render(f"Score: {score}", True, (255, 255, 255))
+            screen.blit(score_label, (10, 30))
+
+            pg.display.update()
+            return score
 
         audio = audio and (clip.audio is not None)
 
@@ -295,24 +368,42 @@ class Game:
             audio_flag.wait()  # wait for the audio to be ready
 
         t0 = time.time()
-        for t in np.arange(1.0 / fps, clip.duration - 0.001, 1.0 / fps):
+        t_vector = np.arange(1.0 / fps, clip.duration - 0.001, 1.0 / fps)
+        for t in t_vector:
+            if self.paused:
+                # video_flag.clear()
+                time.sleep(2)
+                # TODO add option for starting audio in sync at given time, and have the audio thread constantly update the time of self
+                # video_flag.set()  # say to the audio: video is ready
+                # audio_flag.wait()  # wait for the audio to be ready
+                self.paused = False
+
             img = clip.get_frame(t)
 
             t1 = time.time()
             time.sleep(max(0, t - (t1 - t0)))
             imdisplay(img, self.screen, ((self.width - clip_width) / 2, 0))
             handle_events(self)
+            self.score = redraw_window(self.screen, t, self.score)
+            if self.back_to_main:
+                self.back_to_main = False
+                video_flag.clear() # kill the audio thread
+                break
 
+        print(f"Total score is: {self.score}")
+        print(f"Returning to Main Menu.")
+
+        self.load_end_of_game_window()
     # endregion
 
-    #region Miscellaneous
+    # region Miscellaneous
     @staticmethod
     def hebrew(text):
         """
         Flips hebrew text direction
         """
         return text[::-1]
-    #endregion
+    # endregion
 
 
 if __name__ == '__main__':
@@ -323,9 +414,9 @@ if __name__ == '__main__':
     # FULLSCREEN = True
 
     if FULLSCREEN:
-        WIDTH, HEIGHT = pg.display.Info().current_w, pg.display.Info().current_h
+        WIDTH, HEIGHT = pg.display.Info().current_w, pg.display.Info().current_h # 1536, 864
     else:
-        WIDTH, HEIGHT = 800, 600
+        WIDTH, HEIGHT = 1200, 650
     # load assets and songs
     ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
     SONGS_PATH = os.path.join(ROOT_PATH, "Songs")
@@ -334,7 +425,8 @@ if __name__ == '__main__':
     green_btn = pg.image.load(os.path.join(ASSET_PATH, "green button.png"))
     BG_main_screen = pg.transform.scale(pg.image.load(os.path.join(ASSET_PATH, "BG_main.jfif")), (WIDTH, HEIGHT))
     BG_secondary_screen = pg.transform.scale(pg.image.load(os.path.join(ASSET_PATH, "BG_sec.jfif")), (WIDTH, HEIGHT))
-    BG_clip_screen = pg.transform.scale(pg.image.load(os.path.join(ASSET_PATH, "BG_clip.jfif")), (WIDTH, HEIGHT))
+    # BG_clip_screen = pg.transform.scale(pg.image.load(os.path.join(ASSET_PATH, "BG_clip.jfif")), (WIDTH, HEIGHT))
+    BG_clip_screen = pg.transform.scale(pg.image.load(os.path.join(ASSET_PATH, "BG_clip2.jfif")), (WIDTH, HEIGHT))
 
     # HMI constants
     main_font = pg.font.SysFont("davidclm", 50)
