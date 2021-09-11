@@ -1,8 +1,8 @@
 import os
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton
-from PyQt5.QtWidgets import QMessageBox, QProgressBar, QStyleFactory
-from PyQt5.QtGui import QPixmap, QIcon, QFont, QColor
+from PyQt5.QtWidgets import QMessageBox, QProgressBar
+from PyQt5.QtGui import QPixmap, QIcon, QFont
 from PyQt5.QtCore import Qt
 import pyautogui
 from webcolors import rgb_to_hex
@@ -41,9 +41,6 @@ class Screen:
 
     prog_bar_bg_color = rgb_to_hex((150, 120, 180))
 
-
-    # FONT = pg.font.SysFont("davidclm", 35)
-    # possible fonts that support hebrew characters: davidclm, alefregular, alef, tahoma
     def __init__(self, win, name):
         self.win = win
         self.name = name
@@ -76,8 +73,6 @@ class Screen:
             btn.adjustSize()
         for bar in self.progressBars:
             bar.adjustSize()
-
-
 
     def create_background(self, label, image_path):
         pix = QPixmap(image_path)
@@ -115,6 +110,7 @@ class Screen:
                           "opacity: 255;"  # 0-255
                           "padding: 3px;"
                           "margin: 2px;")
+
     def stylize_progress_bar(self, bar):
         prog_width = 800
         prog_height = 150
@@ -224,7 +220,8 @@ class GameScreen(Screen):
         self.buttons.append(button_pause)
 
         button_exit_to_main = QPushButton(self.win)
-        self.stylize_btn(button_exit_to_main, self.win.width - self.btn_width, 10, self.win.btn_stop_game, "חזרה לתפריט הראשי")
+        end_of_screen_pos = self.win.width - self.btn_width
+        self.stylize_btn(button_exit_to_main, end_of_screen_pos, 10, self.win.btn_stop_game, "חזרה לתפריט הראשי")
         self.buttons.append(button_exit_to_main)
 
         progress_bar = QProgressBar(self.win)
@@ -261,11 +258,8 @@ class ScoreScreen(Screen):
         self.buttons.append(button_return_to_main)
 
 
-
-
-
 class MyWindow(QMainWindow):
-    def __init__(self, x, y, width, height, title):
+    def __init__(self, width, height, title):
         super(MyWindow, self).__init__()
         # Set screen size
         screen_size = pyautogui.size()
@@ -312,18 +306,18 @@ class MyWindow(QMainWindow):
         pygame.mixer.quit()
         self.activate_screen("second")
 
-
     def btn_return_to_main(self):
         self.activate_screen("main")
 
     def btn_exit(self):
-        buttonReply = QMessageBox.question(self, 'PyQt5 message', "Exit the application?",
-                                           QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if buttonReply == QMessageBox.Yes:
+        button_reply = QMessageBox.question(self, 'PyQt5 message', "Exit the application?",
+                                            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if button_reply == QMessageBox.Yes:
             sys.exit()
 
     def btn_choose_song(self):
-        def launch_gui_updating_thread(self):
+        def launch_gui_updating_thread():
             while self.running:
                 if self.paused:
                     continue
@@ -331,25 +325,24 @@ class MyWindow(QMainWindow):
                     # song finished running
                     return
 
-                curr_progress = pygame.mixer.music.get_pos() / 1000 # in seconds
+                curr_progress = pygame.mixer.music.get_pos() / 1000  # in seconds
                 progress_percentage = curr_progress / self.total_song_length * 100
                 self.screens['game'].progressBars[0].setValue(int(progress_percentage))
 
         self.running = True
         song_path = os.path.join(SONGS_PATH, "One Kiss.mp3")
         audio = MP3(song_path)
-        self.total_song_length = audio.info.length # in seconds 223.128
+        self.total_song_length = audio.info.length  # in seconds 223.128
         self.activate_screen("game")
-        pygame.mixer.init() # init pygame mixer
-        pygame.mixer.music.load(song_path) #charge la musique
+        pygame.mixer.init()  # init pygame mixer
+        pygame.mixer.music.load(song_path)  # charge la musique
         pygame.mixer.music.play()
 
-        t = Thread(target=launch_gui_updating_thread, args=(self,))
+        # t = Thread(target=launch_gui_updating_thread, args=(self,))
+        t = Thread(target=launch_gui_updating_thread, args=())
         t.start()
 
         # launch_gui_updating_thread()
-
-
 
     def btn_pause_game(self):
         if self.paused:
@@ -364,7 +357,6 @@ class MyWindow(QMainWindow):
         pygame.mixer.music.fadeout(2000)
         self.activate_screen("score")
 
-
     # endregion
 
 
@@ -377,7 +369,7 @@ def launch_game():
     else:
         width, height = 1800, 900
 
-    win = MyWindow(0, 0, width, height, "Clicker Hero")
+    MyWindow(width, height, "Clicker Hero")
 
     sys.exit(app.exec_())
 
