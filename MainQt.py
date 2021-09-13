@@ -1,22 +1,40 @@
 import os
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton
-from PyQt5.QtWidgets import QMessageBox, QProgressBar
-from PyQt5.QtGui import QPixmap, QIcon, QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+)
+from PyQt5.QtGui import QPixmap, QIcon, QFont, QRegion, QPainterPath, QPainter, QPen, QColor
+from PyQt5.QtCore import Qt, QThread, QRect
 import pyautogui
 from webcolors import rgb_to_hex
 import pygame.mixer
 from mutagen.mp3 import MP3
 from threading import Thread
-
+import time
 # region init
 # load assets and songs
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 SONGS_PATH = os.path.join(ROOT_PATH, "Songs")
-ASSET_PATH = os.path.join(ROOT_PATH, "Assets")
+# ASSET_PATH = os.path.join(ROOT_PATH, "Assets")
+ASSET_PATH = r'Assets/'
 
 # endregion
+
+class AutoClickerAnimation(QThread):
+    def __init__(self, parent = None):
+        super(AutoClickerAnimation, self).__init__(parent)
+
+    def run(self):
+        for i in range(10):
+            print(i)
+            time.sleep(2)
+            i += 1
 
 
 class Screen:
@@ -46,6 +64,7 @@ class Screen:
         self.name = name
         self.labels = []
         self.buttons = []
+        self.autoClickerAnimations = []
         self.progressBars = []
 
     def show(self):
@@ -57,6 +76,8 @@ class Screen:
             btn.show()
         for bar in self.progressBars:
             bar.show()
+        for clicker in self.autoClickerAnimations:
+            clicker.show()
 
     def hide(self):
         for lbl in self.labels:
@@ -65,14 +86,18 @@ class Screen:
             btn.hide()
         for bar in self.progressBars:
             bar.hide()
+        for clicker in self.autoClickerAnimations:
+            clicker.hide()
 
-    def update(self):
-        for lbl in self.buttons:
-            lbl.adjustSize()
-        for btn in self.buttons:
-            btn.adjustSize()
-        for bar in self.progressBars:
-            bar.adjustSize()
+    # def update(self):
+    #     for lbl in self.buttons:
+    #         lbl.adjustSize()
+    #     for btn in self.buttons:
+    #         btn.adjustSize()
+    #     for bar in self.progressBars:
+    #         bar.adjustSize()
+    #     for clicker in self.autoClickerAnimations:
+    #         clicker.adjustSize()
 
     def create_background(self, label, image_path):
         pix = QPixmap(image_path)
@@ -123,16 +148,26 @@ class Screen:
                           f"border: 1px solid red;"
                           f"border-radius: 10;")
 
+    def stylize_autoclicker(self, clicker, pos_x, pos_y, logic, text=""):
+        clicker.setText(text)
+        clicker.clicked.connect(logic)
+
+        clicker.setFont(self.btn_text_font)
+        clicker.setGeometry(pos_x, pos_y, self.btn_width, self.btn_height)
+
+        # region = QRegion(QRect(100, 100, 444, 444), QRegion.Ellipse)
+        # clicker.setMask(region)
+
 
 class MainScreen(Screen):
     def __init__(self, win, name):
-        super(MainScreen, self).__init__(win, name)
+        super().__init__(win, name)
         self.create_screen()
         self.hide()
 
     def create_screen(self):
         # Background
-        bg_image_path = os.path.join(ASSET_PATH, "BG_main.jpg")
+        bg_image_path = ASSET_PATH + "BG_main.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -156,8 +191,12 @@ class MainScreen(Screen):
         self.stylize_btn(button_start, btn_x, btn_y, self.win.btn_start_game, "התחל משחק")
         self.buttons.append(button_start)
 
+        button_change_user = QPushButton(self.win)
+        self.stylize_btn(button_change_user, btn_x, btn_y + dy, self.win.btn_change_user, "החלף משתמש")
+        self.buttons.append(button_change_user)
+
         button_exit = QPushButton(self.win)
-        self.stylize_btn(button_exit, btn_x, btn_y + dy, self.win.btn_exit, "יציאה")
+        self.stylize_btn(button_exit, btn_x, btn_y + 2*dy, self.win.btn_exit, "יציאה")
         self.buttons.append(button_exit)
 
 
@@ -170,7 +209,7 @@ class SecondScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = os.path.join(ASSET_PATH, "BG_sec.jpg")
+        bg_image_path = ASSET_PATH + "BG_sec.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -197,13 +236,13 @@ class SecondScreen(Screen):
 class GameScreen(Screen):
 
     def __init__(self, win, name):
-        super(GameScreen, self).__init__(win, name)
+        super().__init__(win, name)
         self.create_screen()
         self.hide()
 
     def create_screen(self):
         # Background
-        bg_image_path = os.path.join(ASSET_PATH, "BG_game.jpg")
+        bg_image_path = ASSET_PATH + "BG_game.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -228,11 +267,26 @@ class GameScreen(Screen):
         self.stylize_progress_bar(progress_bar)
         self.progressBars.append(progress_bar)
 
+        # autoclicker animations
+
+
+        # self.win.autoClicker1Thread = self.create_thread()
+
+    # def create_thread(self):
+    #     thread = QThread()
+    #     worker = Worker()
+    #     worker.moveToThread(thread)
+    #     thread.started.connect(worker.run)
+    #     worker.finished.connect(thread.quit)
+    #     worker.finished.connect(worker.deleteLater)
+    #     thread.finished.connect(thread.deleteLater)
+    #     worker.progress.connect(self.win.animation1)
+    #     return thread
 
 class ScoreScreen(Screen):
 
     def __init__(self, win, name):
-        super(ScoreScreen, self).__init__(win, name)
+        super().__init__(win, name)
         self.create_screen()
         self.hide()
 
@@ -260,35 +314,34 @@ class ScoreScreen(Screen):
 
 class MyWindow(QMainWindow):
     def __init__(self, width, height, title):
-        super(MyWindow, self).__init__()
-        # Set screen size
-        screen_size = pyautogui.size()
+        super().__init__()
+        full_screen_size = pyautogui.size()
         self.width = width
         self.height = height
-        self.setGeometry(int((screen_size[0] - width)/2), int((screen_size[1] - height)/2), width, height)
+        self.setGeometry(int((full_screen_size[0] - width)/2), int((full_screen_size[1] - height)/2), width, height)
 
         # Set screen title, icon and application style
         self.setWindowTitle(title)
         self.setWindowIcon(QIcon(os.path.join(ASSET_PATH, 'green button.png')))
 
-        # Define the different screens
         self.active_screen = "None"
-        self.screens = {}
+
+        # Define the different screens
         main_screen = MainScreen(self, "Main Menu Screen")
         secondary_screen = SecondScreen(self, "Secondary Menu Screen")
         game_screen = GameScreen(self, "Game Screen")
         score_screen = ScoreScreen(self, "Score Screen")
-        self.screens['main'] = main_screen
-        self.screens['second'] = secondary_screen
-        self.screens['game'] = game_screen
-        self.screens['score'] = score_screen
+        self.screens = {'main': main_screen,
+                        'second': secondary_screen,
+                        'game': game_screen,
+                        'score': score_screen}
 
-        # Load the main screen on game startup
-        self.activate_screen("main")
         self.total_song_length = -1
-
+        self.changing_user = False
         self.running = False
         self.paused = False
+
+        self.activate_screen("main")  # Load the main screen on game startup
         self.show()  # render
 
     def activate_screen(self, screen):
@@ -309,6 +362,13 @@ class MyWindow(QMainWindow):
     def btn_return_to_main(self):
         self.activate_screen("main")
 
+    def btn_change_user(self):
+        if not self.changing_user:
+            self.changing_user = True
+            le = QLineEdit("User name here:", self)
+            le.move(50, 50)
+            le.show()
+
     def btn_exit(self):
         button_reply = QMessageBox.question(self, 'PyQt5 message', "Exit the application?",
                                             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -317,32 +377,54 @@ class MyWindow(QMainWindow):
             sys.exit()
 
     def btn_choose_song(self):
-        def launch_gui_updating_thread():
-            while self.running:
-                if self.paused:
-                    continue
-                elif pygame.mixer.music.get_pos() == -1:
+        def launch_gui_updating_thread(game, music):
+            while game.running:
+                if music.get_pos() == -1:
                     # song finished running
+                    self.btn_stop_game()
                     return
 
-                curr_progress = pygame.mixer.music.get_pos() / 1000  # in seconds
+                curr_progress = music.get_pos() / 1000  # in seconds
                 progress_percentage = curr_progress / self.total_song_length * 100
                 self.screens['game'].progressBars[0].setValue(int(progress_percentage))
+                time.sleep(1)
+
+        def animation_thread(game, clicker):
+
+
+            curr = 50
+            i = 1
+            while game.running:
+                # autoClicker1.move(curr + i, curr + i)
+                i += 1
+
+
+                time.sleep(0.1)
+
 
         self.running = True
         song_path = os.path.join(SONGS_PATH, "One Kiss.mp3")
         audio = MP3(song_path)
         self.total_song_length = audio.info.length  # in seconds 223.128
-        self.activate_screen("game")
+
         pygame.mixer.init()  # init pygame mixer
         pygame.mixer.music.load(song_path)  # charge la musique
         pygame.mixer.music.play()
 
-        # t = Thread(target=launch_gui_updating_thread, args=(self,))
-        t = Thread(target=launch_gui_updating_thread, args=())
-        t.start()
+        progressBarThread = Thread(target=launch_gui_updating_thread, args=(self, pygame.mixer.music,))
+        progressBarThread.start()
 
-        # launch_gui_updating_thread()
+        # add autoclicker animations to screen
+        autoClicker1 = QPushButton(self)
+        self.screens["game"].stylize_autoclicker(autoClicker1, 550, 550, lambda: print("hello"), "AC1")
+        self.screens["game"].autoClickerAnimations.append(autoClicker1)
+
+        self.activate_screen("game")
+
+
+        # animationThread = Thread(target=animation_thread, args=(self, autoClicker1))
+        # animationThread.start()
+
 
     def btn_pause_game(self):
         if self.paused:
@@ -356,9 +438,10 @@ class MyWindow(QMainWindow):
         self.running = False
         pygame.mixer.music.fadeout(2000)
         self.activate_screen("score")
-
     # endregion
 
+    def func(self):
+        print(f"completed: 2")
 
 def launch_game():
     app = QApplication(sys.argv)
