@@ -32,7 +32,7 @@ ASSET_PATH = r'Assets/'
 
 
 class ACThread(QThread):
-    clicker_pos = QtCore.pyqtSignal(int, int)
+    clicker_pos = QtCore.pyqtSignal(int, int, int)
 
     def __init__(self, win):
         QThread.__init__(self)
@@ -53,26 +53,26 @@ class ACThread(QThread):
         center_of_rotation = (curr_w, curr_h)
         angle = np.radians(45)
         omega = 0.1
-        noise = 0
+        noise = 10
         dt = 0.2
         while self.win.running:
             # #animations
             if noise == 0:
-                rand = [0, 0]
+                rand = [0, 0, 0, 0, 0, 0]
             else:
-                rand = np.random.randint(-noise, noise, 2)
+                rand = np.random.randint(-noise, noise, 6)
 
             x1 = center_of_rotation[0] + r * np.cos(angle) + rand[0]
             y1 = center_of_rotation[1] - r * np.sin(angle) + rand[1]
-            # x2 = center_of_rotation[0] + r * np.cos(angle) + rand[2]
-            # y2 = center_of_rotation[1] - r * np.sin(angle) + rand[3]
-            # x3 = center_of_rotation[0] + r * np.cos(angle) + rand[4]
-            # y3 = center_of_rotation[1] - r * np.sin(angle) + rand[5]
+            x2 = center_of_rotation[0] + r * np.cos(angle) + rand[2]
+            y2 = center_of_rotation[1] - r * np.sin(angle) + rand[3]
+            x3 = center_of_rotation[0] + r * np.cos(angle) + rand[4]
+            y3 = center_of_rotation[1] - r * np.sin(angle) + rand[5]
             #
             angle = (angle + omega * dt) % 360
-            self.clicker_pos.emit(int(x1), int(y1)) # index 0
-            # self.clicker_pos.emit(int(x2), int(y2), 1) # index 1
-            # self.clicker_pos.emit(int(x3), int(y3), 2) # index 2
+            self.clicker_pos.emit(int(x1), int(y1), 0) # index 0
+            self.clicker_pos.emit(int(x2), int(y2), 1) # index 1
+            self.clicker_pos.emit(int(x3), int(y3), 2) # index 2
 
             time.sleep(dt)
 
@@ -476,13 +476,13 @@ class MyWindow(QMainWindow):
         autoClicker1.move(int(self.width / 2), int(self.height / 2))
         self.screens["game"].autoClickerAnimations.append(autoClicker1)
 
-        # autoClicker2 = PowerBar()
-        # autoClicker2.move(int(self.width / 2), int(self.height / 2))
-        # self.screens["game"].autoClickerAnimations.append(autoClicker2)
+        autoClicker2 = PowerBar()
+        autoClicker2.move(int(self.width / 2), int(self.height / 2))
+        self.screens["game"].autoClickerAnimations.append(autoClicker2)
 
-        # autoClicker3 = PowerBar()
-        # autoClicker3.move(int(self.width / 2), int(self.height / 2))
-        # self.screens["game"].autoClickerAnimations.append(autoClicker3)
+        autoClicker3 = PowerBar()
+        autoClicker3.move(int(self.width / 2), int(self.height / 2))
+        self.screens["game"].autoClickerAnimations.append(autoClicker3)
 
         _autoClicker1Thread = ACThread(self)
         _autoClicker1Thread.clicker_pos.connect(self.moveAutoClickers)
@@ -501,8 +501,8 @@ class MyWindow(QMainWindow):
     def updateProgressBar(self, progress):
         self.screens['game'].progressBars[0].setValue(progress)
 
-    def moveAutoClickers(self, x, y):
-        self.screens['game'].autoClickerAnimations[0].move(x, y)
+    def moveAutoClickers(self, x, y, index):
+        self.screens['game'].autoClickerAnimations[index].move(x, y)
 
 
     def btn_pause_game(self):
