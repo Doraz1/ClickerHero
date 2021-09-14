@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QProgressBar
 )
 from PyQt5.QtGui import QPixmap, QIcon, QFont, QPainter
-from PyQt5.QtCore import Qt, QThread
+from PyQt5.QtCore import Qt, QThread, QRect
 import pyautogui
 from webcolors import rgb_to_hex
 import pygame.mixer
@@ -38,23 +38,32 @@ class ACThread(QThread):
         QThread.__init__(self)
         self.win = win
 
-        # self.clicker1 = win.screens['game'].autoClickerAnimations[0]
-        # self.clicker3 = win.screens['game'].autoClickerAnimations[1]
-        # self.clicker2 = win.screens['game'].autoClickerAnimations[2]
+        self.clicker1 = win.screens['game'].autoClickerAnimations[0]
+        self.clicker3 = win.screens['game'].autoClickerAnimations[1]
+        self.clicker2 = win.screens['game'].autoClickerAnimations[2]
 
     def __del__(self):
         self.wait()
 
     def run(self):
         # clicker animation constants
-        curr_w = int(self.win.width / 2)
-        curr_h = int(self.win.height / 2)
         r = 80
-        center_of_rotation = (curr_w, curr_h)
-        angle = np.radians(45)
-        omega = 0.1
-        noise = 10
-        dt = 0.2
+        angle = np.radians(90)
+        omega = 1
+        noise = 0
+        dt = 0.05
+        geo1 = self.clicker1.geometry()  # QRect
+        ac1_x, ac1_y = geo1.x(), geo1.y()
+        CoR1 = (ac1_x - r, ac1_y)  # Center of Rotation
+
+        geo2 = self.clicker2.geometry()
+        ac2_x, ac2_y = geo2.x(), geo2.y()
+        CoR2 = (ac2_x - r, ac2_y)  # Center of Rotation
+
+        geo3 = self.clicker3.geometry()
+        ac3_x, ac3_y = geo3.x(), geo3.y()
+        CoR3 = (ac3_x - r, ac3_y)  # Center of Rotation
+
         while self.win.running:
             # #animations
             if noise == 0:
@@ -62,12 +71,12 @@ class ACThread(QThread):
             else:
                 rand = np.random.randint(-noise, noise, 6)
 
-            x1 = center_of_rotation[0] + r * np.cos(angle) + rand[0]
-            y1 = center_of_rotation[1] - r * np.sin(angle) + rand[1]
-            x2 = center_of_rotation[0] + r * np.cos(angle) + rand[2]
-            y2 = center_of_rotation[1] - r * np.sin(angle) + rand[3]
-            x3 = center_of_rotation[0] + r * np.cos(angle) + rand[4]
-            y3 = center_of_rotation[1] - r * np.sin(angle) + rand[5]
+            x1 = CoR1[0] + r * np.cos(angle) + rand[0]
+            y1 = CoR1[1] - r * np.sin(angle) + rand[1]
+            x2 = CoR2[0] + r * np.cos(angle) + rand[2]
+            y2 = CoR2[1] - r * np.sin(angle) + rand[3]
+            x3 = CoR3[0] + r * np.cos(angle) + rand[4]
+            y3 = CoR3[1] - r * np.sin(angle) + rand[5]
             #
             angle = (angle + omega * dt) % 360
             self.clicker_pos.emit(int(x1), int(y1), 0) # index 0
@@ -472,16 +481,19 @@ class MyWindow(QMainWindow):
         _progressBarThread.start()
 
         # add autoclicker animations to screen
+        click_offset_x = 200
+        click_offset_y = 200
+
         autoClicker1 = PowerBar()
         autoClicker1.move(int(self.width / 2), int(self.height / 2))
         self.screens["game"].autoClickerAnimations.append(autoClicker1)
 
         autoClicker2 = PowerBar()
-        autoClicker2.move(int(self.width / 2), int(self.height / 2))
+        autoClicker2.move(int(self.width / 2) - click_offset_x, int(self.height / 2) + click_offset_y)
         self.screens["game"].autoClickerAnimations.append(autoClicker2)
 
         autoClicker3 = PowerBar()
-        autoClicker3.move(int(self.width / 2), int(self.height / 2))
+        autoClicker3.move(int(self.width / 2) + click_offset_x, int(self.height / 2) + click_offset_y)
         self.screens["game"].autoClickerAnimations.append(autoClicker3)
 
         _autoClicker1Thread = ACThread(self)
