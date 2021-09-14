@@ -1,5 +1,6 @@
 import os
 import sys
+from PyQt5 import QtCore
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -7,16 +8,19 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QLineEdit,
     QMessageBox,
-    QProgressBar,
+    QProgressBar
 )
-from PyQt5.QtGui import QPixmap, QIcon, QFont, QRegion, QPainterPath, QPainter, QPen, QColor
-from PyQt5.QtCore import Qt, QThread, QRect
+from PyQt5.QtGui import QPixmap, QIcon, QFont, QPainter
+from PyQt5.QtCore import Qt, QThread
 import pyautogui
 from webcolors import rgb_to_hex
 import pygame.mixer
 from mutagen.mp3 import MP3
-from threading import Thread
 import time
+from autoClickerAnimation import PowerBar
+import numpy as np
+
+
 # region init
 # load assets and songs
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -26,15 +30,80 @@ ASSET_PATH = r'Assets/'
 
 # endregion
 
-class AutoClickerAnimation(QThread):
-    def __init__(self, parent = None):
-        super(AutoClickerAnimation, self).__init__(parent)
+
+class ACThread(QThread):
+    clicker_pos = QtCore.pyqtSignal(int, int)
+
+    def __init__(self, win):
+        QThread.__init__(self)
+        self.win = win
+
+        # self.clicker1 = win.screens['game'].autoClickerAnimations[0]
+        # self.clicker3 = win.screens['game'].autoClickerAnimations[1]
+        # self.clicker2 = win.screens['game'].autoClickerAnimations[2]
+
+    def __del__(self):
+        self.wait()
 
     def run(self):
-        for i in range(10):
-            print(i)
-            time.sleep(2)
-            i += 1
+        # clicker animation constants
+        curr_w = int(self.win.width / 2)
+        curr_h = int(self.win.height / 2)
+        r = 80
+        center_of_rotation = (curr_w, curr_h)
+        angle = np.radians(45)
+        omega = 0.1
+        noise = 0
+        dt = 0.2
+        while self.win.running:
+            # #animations
+            if noise == 0:
+                rand = [0, 0]
+            else:
+                rand = np.random.randint(-noise, noise, 2)
+
+            x1 = center_of_rotation[0] + r * np.cos(angle) + rand[0]
+            y1 = center_of_rotation[1] - r * np.sin(angle) + rand[1]
+            # x2 = center_of_rotation[0] + r * np.cos(angle) + rand[2]
+            # y2 = center_of_rotation[1] - r * np.sin(angle) + rand[3]
+            # x3 = center_of_rotation[0] + r * np.cos(angle) + rand[4]
+            # y3 = center_of_rotation[1] - r * np.sin(angle) + rand[5]
+            #
+            angle = (angle + omega * dt) % 360
+            self.clicker_pos.emit(int(x1), int(y1)) # index 0
+            # self.clicker_pos.emit(int(x2), int(y2), 1) # index 1
+            # self.clicker_pos.emit(int(x3), int(y3), 2) # index 2
+
+            time.sleep(dt)
+
+
+class ProgressBarThread(QThread):
+    dt = 1 #  sec
+    progress = QtCore.pyqtSignal(int)
+
+    def __init__(self, win, music):
+        QThread.__init__(self)
+        self.win = win
+        self.music = music
+
+    def __del__(self):
+        self.wait()
+
+    def run(self):
+        dt = 1
+
+        while self.win.running:
+            if self.music.get_pos() == -1:
+                # song finished running
+                self.btn_stop_game()
+                return
+
+            curr_progress = self.music.get_pos() / 1000  # in seconds
+            progress_percentage = curr_progress / self.win.total_song_length * 100
+            self.progress.emit(int(progress_percentage))
+
+            # self.win.screens['game'].progressBars[0].setValue(int(progress_percentage))
+            time.sleep(dt)
 
 
 class Screen:
@@ -122,6 +191,9 @@ class Screen:
                           "margin: 2px;")
 
     def stylize_btn(self, btn, pos_x, pos_y, logic, text=""):
+        # self.closeButton.setShortcut('Ctrl+D')  # shortcut key
+        # self.closeButton.setToolTip("Close the widget")  # Tool tip
+
         btn.setText(text)
         btn.clicked.connect(logic)
 
@@ -155,8 +227,16 @@ class Screen:
         clicker.setFont(self.btn_text_font)
         clicker.setGeometry(pos_x, pos_y, self.btn_width, self.btn_height)
 
-        # region = QRegion(QRect(100, 100, 444, 444), QRegion.Ellipse)
-        # clicker.setMask(region)
+
+        image_pixmap = QPixmap("Assets/green button.png")
+        scaled_pixmap = image_pixmap.scaled(self.win.width, self.win.height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        painter = QPainter(self.win)
+        painter.drawPixmap(0, 0, image_pixmap)
+        # painter.drawPixmap(QRect(50, 0, 50, 50), image_pixmap)
+        # painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        # painter.drawPixmap(QRect(0, 0, 50, 50), image_pixmap)
+        # img = img.scaled(50, 50, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        # p.drawPixmap(100, 0, img);
 
 
 class MainScreen(Screen):
@@ -283,6 +363,7 @@ class GameScreen(Screen):
     #     worker.progress.connect(self.win.animation1)
     #     return thread
 
+
 class ScoreScreen(Screen):
 
     def __init__(self, win, name):
@@ -377,31 +458,6 @@ class MyWindow(QMainWindow):
             sys.exit()
 
     def btn_choose_song(self):
-        def launch_gui_updating_thread(game, music):
-            while game.running:
-                if music.get_pos() == -1:
-                    # song finished running
-                    self.btn_stop_game()
-                    return
-
-                curr_progress = music.get_pos() / 1000  # in seconds
-                progress_percentage = curr_progress / self.total_song_length * 100
-                self.screens['game'].progressBars[0].setValue(int(progress_percentage))
-                time.sleep(1)
-
-        def animation_thread(game, clicker):
-
-
-            curr = 50
-            i = 1
-            while game.running:
-                # autoClicker1.move(curr + i, curr + i)
-                i += 1
-
-
-                time.sleep(0.1)
-
-
         self.running = True
         song_path = os.path.join(SONGS_PATH, "One Kiss.mp3")
         audio = MP3(song_path)
@@ -411,19 +467,42 @@ class MyWindow(QMainWindow):
         pygame.mixer.music.load(song_path)  # charge la musique
         pygame.mixer.music.play()
 
-        progressBarThread = Thread(target=launch_gui_updating_thread, args=(self, pygame.mixer.music,))
-        progressBarThread.start()
+        _progressBarThread = ProgressBarThread(self, pygame.mixer.music)
+        _progressBarThread.progress.connect(self.updateProgressBar)
+        _progressBarThread.start()
 
         # add autoclicker animations to screen
-        autoClicker1 = QPushButton(self)
-        self.screens["game"].stylize_autoclicker(autoClicker1, 550, 550, lambda: print("hello"), "AC1")
+        autoClicker1 = PowerBar()
+        autoClicker1.move(int(self.width / 2), int(self.height / 2))
         self.screens["game"].autoClickerAnimations.append(autoClicker1)
+
+        # autoClicker2 = PowerBar()
+        # autoClicker2.move(int(self.width / 2), int(self.height / 2))
+        # self.screens["game"].autoClickerAnimations.append(autoClicker2)
+
+        # autoClicker3 = PowerBar()
+        # autoClicker3.move(int(self.width / 2), int(self.height / 2))
+        # self.screens["game"].autoClickerAnimations.append(autoClicker3)
+
+        _autoClicker1Thread = ACThread(self)
+        _autoClicker1Thread.clicker_pos.connect(self.moveAutoClickers)
+        _autoClicker1Thread.start()
+
+
+
+
 
         self.activate_screen("game")
 
-
         # animationThread = Thread(target=animation_thread, args=(self, autoClicker1))
         # animationThread.start()
+
+    # @pyqtSlot(int)
+    def updateProgressBar(self, progress):
+        self.screens['game'].progressBars[0].setValue(progress)
+
+    def moveAutoClickers(self, x, y):
+        self.screens['game'].autoClickerAnimations[0].move(x, y)
 
 
     def btn_pause_game(self):
@@ -440,8 +519,7 @@ class MyWindow(QMainWindow):
         self.activate_screen("score")
     # endregion
 
-    def func(self):
-        print(f"completed: 2")
+
 
 def launch_game():
     app = QApplication(sys.argv)
