@@ -6,20 +6,19 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QLabel,
     QPushButton,
-    QLineEdit,
     QMessageBox,
     QProgressBar
 )
 from PyQt5.QtGui import QPixmap, QIcon, QFont, QPainter
-from PyQt5.QtCore import Qt, QThread, QRect
+from PyQt5.QtCore import Qt, QThread
 import pyautogui
 from webcolors import rgb_to_hex
 import pygame.mixer
 from mutagen.mp3 import MP3
 import time
-from autoClickerAnimation import PowerBar
+from Scripts.myCustomWidgets import AutoClickerAnimation, ChangeUserList
+from Scripts.database import DataBase
 import numpy as np
-
 
 # region init
 # load assets and songs
@@ -27,20 +26,44 @@ ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 SONGS_PATH = os.path.join(ROOT_PATH, "Songs")
 # ASSET_PATH = os.path.join(ROOT_PATH, "Assets")
 ASSET_PATH = r'Assets/'
-
 # endregion
 
 
-class ACThread(QThread):
+class ACBlinkThread(QThread):
+    def __init__(self, win):
+        QThread.__init__(self)
+        self.win = win
+        self.clicker1 = win.screens['game'].autoClickerAnimations[0]
+        self.clicker2 = win.screens['game'].autoClickerAnimations[1]
+        self.clicker3 = win.screens['game'].autoClickerAnimations[2]
+        self.BPM = self.clicker1.BPM
+
+    def __del__(self):
+        self.wait()
+
+    def run(self):
+        # clicker animation constants
+        start_time = time.time()
+        dt = self.BPM / 60  # every this many seconds
+        iteration = 1
+        while self.win.running:
+            interval = 1
+            time.sleep(start_time + iteration * dt - time.time())
+            self.clicker1.btnClick()
+            self.clicker2.btnClick()
+            self.clicker3.btnClick()
+            iteration += 1
+
+
+class ACMoveThread(QThread):
     clicker_pos = QtCore.pyqtSignal(int, int, int)
 
     def __init__(self, win):
         QThread.__init__(self)
         self.win = win
-
         self.clicker1 = win.screens['game'].autoClickerAnimations[0]
-        self.clicker3 = win.screens['game'].autoClickerAnimations[1]
-        self.clicker2 = win.screens['game'].autoClickerAnimations[2]
+        self.clicker2 = win.screens['game'].autoClickerAnimations[1]
+        self.clicker3 = win.screens['game'].autoClickerAnimations[2]
 
     def __del__(self):
         self.wait()
@@ -52,6 +75,7 @@ class ACThread(QThread):
         omega = 1
         noise = 0
         dt = 0.05
+
         geo1 = self.clicker1.geometry()  # QRect
         ac1_x, ac1_y = geo1.x(), geo1.y()
         CoR1 = (ac1_x - r, ac1_y)  # Center of Rotation
@@ -111,22 +135,22 @@ class ProgressBarThread(QThread):
             progress_percentage = curr_progress / self.win.total_song_length * 100
             self.progress.emit(int(progress_percentage))
 
-            # self.win.screens['game'].progressBars[0].setValue(int(progress_percentage))
             time.sleep(dt)
 
 
 class Screen:
     # Label style
     lbl_color = rgb_to_hex((180, 180, 255))
-    lbl_width = 1300
+    lbl_width = 1500
     lbl_height = 140
     lbl_margin_y = 50
-    lbl_text_color = rgb_to_hex((240, 240, 240))
+    lbl_text_color = rgb_to_hex((150, 200, 80))
     lbl_bg_color = Qt.transparent
-    lbl_text_font = QFont('Times', 25, QFont.Bold)
+    lbl_text_font = QFont('Times', 55, QFont.Bold)
 
     # Button style
     btn_color = rgb_to_hex((240, 240, 240))
+    btn_initial_y = 250
     btn_width = 700
     btn_height = 140
     btn_margin_x = 30
@@ -184,20 +208,17 @@ class Screen:
         label.setPixmap(pixmap_resized)
         label.resize(self.win.width, self.win.height)
 
-    def stylize_lbl(self, lbl, pos_x, pos_y, logic, text=""):
+    def stylize_lbl(self, lbl, pos_x, pos_y, text=""):
         lbl.setText(text)
-        lbl.clicked.connect(logic)
-
-        lbl.setFont(self.btn_text_font)
-        lbl.setGeometry(pos_x, pos_y, self.btn_width, self.btn_height)
-        lbl.setStyleSheet(f"background-color: {self.btn_bg_color}; "
-                          f"color: {self.btn_text_color};"
-                          "border-radius: 10;"
-                          "border: 1px solid red;"
+        lbl.setFont(self.lbl_text_font)
+        lbl.setGeometry(pos_x, pos_y, self.lbl_width, self.lbl_height)
+        lbl.setStyleSheet(f"background-color: {self.lbl_bg_color}; "
+                          f"color: {self.lbl_text_color};"
                           "text-align: center;"
                           "opacity: 255;"  # 0-255
                           "padding: 3px;"
                           "margin: 2px;")
+        lbl.setAlignment(Qt.AlignCenter)
 
     def stylize_btn(self, btn, pos_x, pos_y, logic, text=""):
         # self.closeButton.setShortcut('Ctrl+D')  # shortcut key
@@ -262,18 +283,12 @@ class MainScreen(Screen):
         self.labels.append(bg_label)
 
         # Labels
-        label1 = QLabel(self.win)
-        label1.setText("label1")
-        label1.move(30, 30)
-        self.labels.append(label1)
-
-        label2 = QLabel(self.win)
-        label2.setText("Welcome!")
-        label2.move(80, 30)
-        self.labels.append(label2)
+        label_welcome = QLabel(self.win)
+        self.stylize_lbl(label_welcome, int((self.win.width - self.lbl_width)/2), 30, "Welcome!")
+        self.labels.append(label_welcome)
 
         # Buttons
-        btn_x, btn_y = int((self.win.width - self.btn_width) / 2), 100  # first button coordinates
+        btn_x, btn_y = int((self.win.width - self.btn_width) / 2), self.btn_initial_y  # first button coordinates
         dy = self.btn_height + self.btn_margin_y
 
         button_start = QPushButton(self.win)
@@ -287,6 +302,18 @@ class MainScreen(Screen):
         button_exit = QPushButton(self.win)
         self.stylize_btn(button_exit, btn_x, btn_y + 2*dy, self.win.btn_exit, "יציאה")
         self.buttons.append(button_exit)
+
+    def show(self):
+        super().show()
+
+        playerName = self.win.dataBase.firstName + " " + self.win.dataBase.lastName
+        if playerName == " ":  # empty string
+            welcomeString = "Welcome!"
+        else:
+            welcomeString = f"Welcome, {playerName}!"
+
+        self.labels[1].setText(welcomeString) # welcome label
+
 
 
 class SecondScreen(Screen):
@@ -303,14 +330,8 @@ class SecondScreen(Screen):
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
 
-        # Labels
-        label1 = QLabel(self.win)
-        label1.setText("One kiss")
-        label1.move(30, 30)
-        self.labels.append(label1)
-
         # Buttons
-        btn_x, btn_y = int((self.win.width - self.btn_width) / 2), 100  # first button coordinates
+        btn_x, btn_y = int((self.win.width - self.btn_width) / 2), self.btn_initial_y  # first button coordinates
         dy = self.btn_height + self.btn_margin_y
 
         button_start = QPushButton(self.win)
@@ -335,12 +356,6 @@ class GameScreen(Screen):
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
-
-        # Labels
-        label1 = QLabel(self.win)
-        label1.setText("שיר 1")
-        label1.move(30, 30)
-        self.labels.append(label1)
 
         # Buttons
         button_pause = QPushButton(self.win)
@@ -388,13 +403,12 @@ class ScoreScreen(Screen):
         self.labels.append(bg_label)
 
         # Labels
-        label1 = QLabel(self.win)
-        label1.setText("כל הכבוד!")
-        label1.move(130, 130)
-        self.labels.append(label1)
+        label_goodJob = QLabel(self.win)
+        self.stylize_lbl(label_goodJob, int((self.win.width - self.lbl_width) / 2), 130, "כל הכבוד!")
+        self.labels.append(label_goodJob)
 
         # Buttons
-        btn_x, btn_y = int((self.win.width - self.btn_width) / 2), 100  # first button coordinates
+        btn_x, btn_y = int((self.win.width - self.btn_width) / 2), self.btn_initial_y  # first button coordinates
         dy = self.btn_height + self.btn_margin_y
 
         button_return_to_main = QPushButton(self.win)
@@ -406,6 +420,7 @@ class MyWindow(QMainWindow):
     def __init__(self, width, height, title):
         super().__init__()
         full_screen_size = pyautogui.size()
+        self.dataBase = DataBase()
         self.width = width
         self.height = height
         self.setGeometry(int((full_screen_size[0] - width)/2), int((full_screen_size[1] - height)/2), width, height)
@@ -414,7 +429,7 @@ class MyWindow(QMainWindow):
         self.setWindowTitle(title)
         self.setWindowIcon(QIcon(os.path.join(ASSET_PATH, 'green button.png')))
 
-        self.active_screen = "None"
+        self.active_screen = None
 
         # Define the different screens
         main_screen = MainScreen(self, "Main Menu Screen")
@@ -424,25 +439,25 @@ class MyWindow(QMainWindow):
         self.screens = {'main': main_screen,
                         'second': secondary_screen,
                         'game': game_screen,
-                        'score': score_screen}
+                        'score': score_screen
+                        }
 
         self.total_song_length = -1
         self.changing_user = False
         self.running = False
         self.paused = False
-
         self.activate_screen("main")  # Load the main screen on game startup
         self.show()  # render
 
-    def activate_screen(self, screen):
-        if self.screens.get(self.active_screen) is not None:
-            self.screens[self.active_screen].hide()
+    def activate_screen(self, screenName):
+        if self.active_screen is not None:
+            self.active_screen.hide()
 
-        for key, value in self.screens.items():
-            if key == screen:
-                self.screens[screen].show()
-                self.active_screen = key
-                print(f"currently active: {value.name}")
+        for screen_name, screen in self.screens.items():
+            if screen_name == screenName:
+                screen.show()
+                self.active_screen = screen
+                print(f"currently active: {screen.name}")
 
     # region Buttons
     def btn_start_game(self):
@@ -453,11 +468,8 @@ class MyWindow(QMainWindow):
         self.activate_screen("main")
 
     def btn_change_user(self):
-        if not self.changing_user:
-            self.changing_user = True
-            le = QLineEdit("User name here:", self)
-            le.move(50, 50)
-            le.show()
+        self.list = ChangeUserList(self, self.dataBase)
+        self.list.show()
 
     def btn_exit(self):
         button_reply = QMessageBox.question(self, 'PyQt5 message', "Exit the application?",
@@ -468,9 +480,10 @@ class MyWindow(QMainWindow):
 
     def btn_choose_song(self):
         self.running = True
-        song_path = os.path.join(SONGS_PATH, "One Kiss.mp3")
+        song_path = os.path.join(SONGS_PATH, "One Kiss_cropped.mp3")
         audio = MP3(song_path)
         self.total_song_length = audio.info.length  # in seconds 223.128
+        BPM = 120  # using audacity
 
         pygame.mixer.init()  # init pygame mixer
         pygame.mixer.music.load(song_path)  # charge la musique
@@ -484,30 +497,28 @@ class MyWindow(QMainWindow):
         click_offset_x = 200
         click_offset_y = 200
 
-        autoClicker1 = PowerBar()
+        autoClicker1 = AutoClickerAnimation(BPM)
         autoClicker1.move(int(self.width / 2), int(self.height / 2))
         self.screens["game"].autoClickerAnimations.append(autoClicker1)
 
-        autoClicker2 = PowerBar()
+        autoClicker2 = AutoClickerAnimation(BPM)
         autoClicker2.move(int(self.width / 2) - click_offset_x, int(self.height / 2) + click_offset_y)
         self.screens["game"].autoClickerAnimations.append(autoClicker2)
 
-        autoClicker3 = PowerBar()
+        autoClicker3 = AutoClickerAnimation(BPM)
         autoClicker3.move(int(self.width / 2) + click_offset_x, int(self.height / 2) + click_offset_y)
         self.screens["game"].autoClickerAnimations.append(autoClicker3)
 
-        _autoClicker1Thread = ACThread(self)
-        _autoClicker1Thread.clicker_pos.connect(self.moveAutoClickers)
-        _autoClicker1Thread.start()
 
+        autoClickerMoveThread = ACMoveThread(self)
+        autoClickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
+        autoClickerMoveThread.start()
 
-
-
+        autoClickerBlinkThread = ACBlinkThread(self)
+        # autoClickerBlinkThread.clicker_pos.connect(self.moveAutoClickers)
+        autoClickerBlinkThread.start()
 
         self.activate_screen("game")
-
-        # animationThread = Thread(target=animation_thread, args=(self, autoClicker1))
-        # animationThread.start()
 
     # @pyqtSlot(int)
     def updateProgressBar(self, progress):
@@ -532,7 +543,6 @@ class MyWindow(QMainWindow):
     # endregion
 
 
-
 def launch_game():
     app = QApplication(sys.argv)
     fullscreen = True
@@ -540,7 +550,7 @@ def launch_game():
         size = pyautogui.size()
         width, height = size[0], size[1]
     else:
-        width, height = 1800, 900
+        width, height = 1600, 900
 
     MyWindow(width, height, "Clicker Hero")
 
