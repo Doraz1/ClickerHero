@@ -9,16 +9,18 @@ class ResetGuiThread(QThread):
         self.win = win
         self.threadactive = False
 
-
     def run(self):
+        print("entered gui rset thread")
         self.threadactive = True
+        self.win.killAllThreads()
+        for clicker in self.win.screens["game"].autoClickerAnimations:
+            clicker.reset()
 
-        self.win.resetGui()
         self.stop()
 
     def stop(self):
         self.threadactive = False
-        self.wait()
+        self.quit()
 
 
 class ACBlinkThread(QThread):
@@ -41,7 +43,7 @@ class ACBlinkThread(QThread):
         dt = self.easierLevel / beats_per_sec  # every this many seconds
         light_up_times = np.arange(0, self.win.total_song_length, dt)
         iteration = 1
-        while self.win.running:
+        while self.win.running and self.threadactive:
             # time_to_sleep = start_time + iteration * dt - time.time()
             time_to_sleep = start_time - time.time() + light_up_times[iteration]
             time.sleep(time_to_sleep)
@@ -51,7 +53,8 @@ class ACBlinkThread(QThread):
 
     def stop(self):
         self.threadactive = False
-        self.wait()
+        # self.clicker.reset()
+        self.quit()
 
 
 class ACMoveThread(QThread):
@@ -114,7 +117,7 @@ class ACMoveThread(QThread):
 
     def stop(self):
         self.threadactive = False
-        self.wait()
+        self.quit()
 
 
 class ProgressBarThread(QThread):
@@ -148,4 +151,4 @@ class ProgressBarThread(QThread):
 
     def stop(self):
         self.threadactive = False
-        self.wait()
+        self.quit()

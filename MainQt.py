@@ -133,11 +133,12 @@ class MyWindow(QMainWindow):
         self.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
         self.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
 
-        self.activate_screen("game")
 
         pygame.mixer.init()  # init pygame mixer
         pygame.mixer.music.load(self.song_path)  # charge la musique
         pygame.mixer.music.play()
+
+        self.activate_screen("game")
 
         self.progressBarThread.start()
         self.clickerMoveThread.start()
@@ -146,14 +147,16 @@ class MyWindow(QMainWindow):
         self.clickerBlinkThread3.start()
 
     def updateProgressBar(self, progress):
-        print(f"progress! {progress}")
         self.screens['game'].progressBars[0].setValue(progress)
 
     def moveAutoClickers(self, x, y, index):
         self.screens['game'].autoClickerAnimations[index].move(x, y)
 
     def resetGui(self):
-        self.resetGuiThread.start()
+        # self.resetGuiThread.start()
+        self.killAllThreads()
+        for clicker in self.screens["game"].autoClickerAnimations:
+            clicker.reset()
 
     def killAllThreads(self):
         self.progressBarThread.stop()
@@ -172,9 +175,11 @@ class MyWindow(QMainWindow):
 
     def btn_stop_game(self):
         self.running = False
-        pygame.mixer.music.fadeout(2000)
         self.activate_screen("score")
-        # self.resetGui()
+        pygame.mixer.music.fadeout(2000)
+
+        self.resetGui()
+
     # endregion
 
 

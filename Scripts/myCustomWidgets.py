@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QPushButton, QApp
 from PyQt5.QtGui import QColor, QRegion, QPainter, QBrush
 from PyQt5.QtCore import Qt, QRect
 import time
+import numpy as np
 
 class AutoClicker(QWidget):
     transparentColor = QColor(50, 50, 50, 30)
@@ -50,13 +51,14 @@ class AutoClickerAnimation(QWidget):
     Demonstrating compound and custom-drawn widget.
     """
     blink_speed = 8
-    blink_time = 3  # sec
+    on_time = 3  # sec
+    blink_time = 1.5  # sec
+    onColor = QColor(255, 0, 0, 255)
+    offColor = QColor(0, 0, 0, 255)
 
     def __init__(self):
         super(AutoClickerAnimation, self).__init__()
-        self.color = QColor(255, 0, 0, 255)
-
-
+        self.color = self.onColor
         layout = QVBoxLayout()
         self.autoclicker = AutoClicker(self)
         layout.addWidget(self.autoclicker)
@@ -66,27 +68,34 @@ class AutoClickerAnimation(QWidget):
         layout.addWidget(self.btn)
 
         self.setLayout(layout)
+
         self.ind = 0
-        self.blinkVar = self.blink_speed
         self.blinkOn = 2
+        self.resetBit = False
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
     def btnClick(self):
-        red = QColor(255, 0, 0, 255)
-        green = QColor(0, 255, 0, 255)
-        blue = QColor(0, 0, 255, 255)
-        colors = [red, green, blue]
+        # red = QColor(255, 0, 0, 255)
+        # green = QColor(0, 255, 0, 255)
+        # blue = QColor(0, 0, 255, 255)
+        # colors = [red, red, red]
 
-        self.autoclicker.setColor(colors[self.ind])
-        self.ind = (self.ind + 1) % len(colors)
+        # self.autoclicker.setColor(colors[self.ind])
+        self.autoclicker.setColor(self.onColor)
+        # self.ind = (self.ind + 1) % len(colors)
 
+        time.sleep(self.on_time - self.blink_time)
         self.blink()
 
     def blink(self):
-        list = range(self.blink_time*self.blink_speed)
+        dt = 1/self.blink_speed
+        list = range(int(self.blink_time*self.blink_speed))
         for i in list:
-            time.sleep(1/self.blink_speed)
+            if self.resetBit:
+                self.resetBit = False
+                break
+            time.sleep(dt)
             self.blinkVar = self.blink_speed
             self.blinkOn = (self.blinkOn - 1) % 3
 
@@ -95,14 +104,21 @@ class AutoClickerAnimation(QWidget):
             if self.blinkOn == 0:
                 new_color.setAlpha(30)
             elif self.blinkOn == 1:
-                new_color.setAlpha(142)
+                new_color.setAlpha(150)
             else:
                 new_color.setAlpha(255)
 
-            self.autoclicker.setColor(new_color)
+            if not self.resetBit:
+                self.autoclicker.setColor(new_color)
 
         print("finished!")
-        # self.autoclicker.setColor(self.transparentColor)
+        self.autoclicker.setColor(self.offColor)
+
+    def reset(self):
+        self.resetBit = True
+        # self.color = self.offColor
+        self.ind = 0
+        self.blinkOn = 2
 
 
 class ChangeUserList(QWidget):
