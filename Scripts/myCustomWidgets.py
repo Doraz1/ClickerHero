@@ -71,14 +71,22 @@ class AutoClickerAnimation(QWidget):
         self.setLayout(layout)
 
         self.ind = ind
-        self.blinkOn = 2
+        self.numBlinkLevels = 8
+        self.blinkState = self.numBlinkLevels - 1
         self.resetBit = False
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
+        minLevel = 30
+        maxLevel = 255
+        step = ((maxLevel - minLevel) / (self.numBlinkLevels - 1)) - 1
+        self.alphaLevels = np.arange(30, 255, int(step), dtype=np.int32)
+
     def btnClick(self):
-        self.blinkOn = 2
-        self.autoclicker.setColor(self.onColor)
+        self.blinkState = self.numBlinkLevels - 1
+        color = self.onColor
+        color.setAlpha(self.alphaLevels[self.blinkState])
+        self.autoclicker.setColor(color)
 
         time.sleep(self.on_time - self.blink_time)
         self.blink()
@@ -86,35 +94,28 @@ class AutoClickerAnimation(QWidget):
     def blink(self):
         dt = 1/self.blink_speed
         list = range(int(self.blink_time*self.blink_speed))
+
+        color = self.onColor
         for i in list:
             if self.resetBit:
                 self.resetBit = False
                 break
             time.sleep(dt)
-            self.blinkVar = self.blink_speed
-            self.blinkOn = (self.blinkOn - 1) % 3
-            print(f"blink state: {self.blinkOn} for clicker {self.ind}")
 
-            new_color = self.autoclicker.color
-
-            if self.blinkOn == 0:
-                new_color.setAlpha(30)
-            elif self.blinkOn == 1:
-                new_color.setAlpha(150)
-            else:
-                new_color.setAlpha(255)
+            self.blinkState = (self.blinkState - 1) % self.numBlinkLevels
+            color.setAlpha(self.alphaLevels[self.blinkState])
 
             if not self.resetBit:
-                self.autoclicker.setColor(new_color)
+                self.autoclicker.setColor(color)
 
-        print("finished!")
         self.autoclicker.setColor(self.offColor)
 
     def reset(self):
         self.resetBit = True
         # self.color = self.offColor
         self.ind = 0
-        self.blinkOn = 2
+        self.blinkState = self.numBlinkLevels - 1
+
 
 
 class ChangeUserList(QWidget):

@@ -110,7 +110,7 @@ class MyWindow(QMainWindow):
             # iterations to play on, assuming each iteration is the shortest beat
             # up to 430 iterations
             easyUp = ACBlinkThread.easierLevel
-            ac1_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]
+            ac1_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]  # notes only till song end
             ac2_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]
             ac3_notes = [easyUp * iter + 4 for iter in iters if iter<(iters[-1]//easyUp) + 1]
             notes.append(ac1_notes)
