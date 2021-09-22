@@ -11,8 +11,9 @@ import pygame.mixer
 from mutagen.mp3 import MP3
 from Scripts.myCustomWidgets import AutoClickerAnimation, ChangeUserList
 from Scripts.database import PlayerDataBase
-from Scripts.threads import ProgressBarThread, ACMoveThread, ACBlinkThread, ResetGuiThread
+from Scripts.threads import ProgressBarThread, ACMoveThread, ACBlinkThread, ResetGuiThread, ClickerBlinkThread
 from Scripts.screens import MainScreen, SecondScreen, GameScreen, ScoreScreen
+import numpy as np
 
 # region init
 # load assets and songs
@@ -94,11 +95,30 @@ class MyWindow(QMainWindow):
         self.song_path = os.path.join(SONGS_PATH, "One Kiss_cropped.mp3")
         self.audio = MP3(self.song_path)
         self.beats_per_min = 123.3  # using audacity we got 123, updated a bit
+        notes = self.get_autoclicker_notes('one kiss')
+        self.begin_game(notes)
 
-        self.begin_game()
-
-    def begin_game(self):
+    def get_autoclicker_notes(self, song_name):
+        beats_per_sec = self.beats_per_min / 60  # 2
+        dt = 1 / beats_per_sec  # no easy up
         self.total_song_length = self.audio.info.length
+        note_times = np.arange(0, self.total_song_length, dt)
+        iters = range(len(note_times))[1:]  # get rid of note 0
+        notes = []
+
+        if song_name == 'one kiss':
+            # iterations to play on, assuming each iteration is the shortest beat
+            # up to 430 iterations
+            easyUp = ACBlinkThread.easierLevel
+            ac1_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]
+            ac2_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]
+            ac3_notes = [easyUp * iter + 4 for iter in iters if iter<(iters[-1]//easyUp) + 1]
+            notes.append(ac1_notes)
+            notes.append(ac2_notes)
+            notes.append(ac3_notes)
+        return notes
+
+    def begin_game(self, notes):
         self.running = True
 
         if self.first_run:
@@ -107,9 +127,9 @@ class MyWindow(QMainWindow):
             self.progressBarThread = ProgressBarThread(self, pygame.mixer.music)
             self.progressBarThread.progress.connect(self.updateProgressBar)
 
-            auto_clicker1 = AutoClickerAnimation()
-            auto_clicker2 = AutoClickerAnimation()
-            auto_clicker3 = AutoClickerAnimation()
+            auto_clicker1 = AutoClickerAnimation(0)
+            auto_clicker2 = AutoClickerAnimation(1)
+            auto_clicker3 = AutoClickerAnimation(2)
             self.screens["game"].autoClickerAnimations.append(auto_clicker1)
             self.screens["game"].autoClickerAnimations.append(auto_clicker2)
             self.screens["game"].autoClickerAnimations.append(auto_clicker3)
@@ -117,9 +137,9 @@ class MyWindow(QMainWindow):
             self.clickerMoveThread = ACMoveThread(self)
             self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
 
-            self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min)
-            self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min)
-            self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min)
+            self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
+            self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
+            self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
 
             self.resetGuiThread = ResetGuiThread(self)
 
@@ -133,12 +153,11 @@ class MyWindow(QMainWindow):
         self.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
         self.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
 
+        self.activate_screen("game")
 
         pygame.mixer.init()  # init pygame mixer
         pygame.mixer.music.load(self.song_path)  # charge la musique
         pygame.mixer.music.play()
-
-        self.activate_screen("game")
 
         self.progressBarThread.start()
         self.clickerMoveThread.start()

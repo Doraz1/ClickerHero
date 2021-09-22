@@ -4,8 +4,26 @@ import time
 import numpy as np
 
 
+class ClickerBlinkThread(QThread):
+    def __init__(self, win, clicker):
+        QThread.__init__(self)
+        self.win = win
+        self.clicker = clicker
+        self.threadactive = False
+
+    def run(self):
+        self.threadactive = True
+        self.clicker.btnClick()
+        self.stop()
+
+    def stop(self):
+        self.threadactive = False
+        # self.clicker.reset()
+        self.quit()
+
 class ResetGuiThread(QThread):
     def __init__(self, win):
+        QThread.__init__(self)
         self.win = win
         self.threadactive = False
 
@@ -26,11 +44,13 @@ class ResetGuiThread(QThread):
 class ACBlinkThread(QThread):
     easierLevel = 8
 
-    def __init__(self, win, clicker_number, bpm):
+    def __init__(self, win, clicker_number, bpm, notes):
         QThread.__init__(self)
         self.win = win
         self.clicker = win.screens['game'].autoClickerAnimations[clicker_number - 1]
         self.bpm = bpm
+        self.notes = notes
+        self.blinkThread = ClickerBlinkThread(self, self.clicker)
 
         self.threadactive = False
 
@@ -40,20 +60,25 @@ class ACBlinkThread(QThread):
         # clicker animation constants
         start_time = time.time()
         beats_per_sec = self.bpm / 60  # 2
-        dt = self.easierLevel / beats_per_sec  # every this many seconds
-        light_up_times = np.arange(0, self.win.total_song_length, dt)
+        dt = 1 / beats_per_sec  # every this many seconds
+        light_up_times = np.arange(0, self.win.total_song_length, dt)  # 1.9sec, 3.8sec, etc.
         iteration = 1
+        note_ind = 0
         while self.win.running and self.threadactive:
-            # time_to_sleep = start_time + iteration * dt - time.time()
             time_to_sleep = start_time - time.time() + light_up_times[iteration]
             time.sleep(time_to_sleep)
+            next_note = self.notes[note_ind]
 
-            self.clicker.btnClick()
+            if next_note == iteration:
+                prev_note = next_note
+                note_ind += 1
+                next_note = self.notes[note_ind]
+                print(f"Hit it on note {prev_note}! Upcoming note: {next_note}\n")
+                self.blinkThread.start()
             iteration += 1
 
     def stop(self):
         self.threadactive = False
-        # self.clicker.reset()
         self.quit()
 
 

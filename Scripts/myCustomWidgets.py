@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QPushButton, QApp
 from PyQt5.QtGui import QColor, QRegion, QPainter, QBrush
 from PyQt5.QtCore import Qt, QRect
 import time
+from Scripts.threads import ClickerBlinkThread
 import numpy as np
 
 class AutoClicker(QWidget):
@@ -50,13 +51,13 @@ class AutoClickerAnimation(QWidget):
     Custom Qt Widget to show a power bar and dial.
     Demonstrating compound and custom-drawn widget.
     """
-    blink_speed = 8
+    blink_speed = 16
     on_time = 3  # sec
     blink_time = 1.5  # sec
     onColor = QColor(255, 0, 0, 255)
-    offColor = QColor(0, 0, 0, 255)
+    offColor = QColor(42, 13, 0, 255)
 
-    def __init__(self):
+    def __init__(self, ind):
         super(AutoClickerAnimation, self).__init__()
         self.color = self.onColor
         layout = QVBoxLayout()
@@ -69,21 +70,15 @@ class AutoClickerAnimation(QWidget):
 
         self.setLayout(layout)
 
-        self.ind = 0
+        self.ind = ind
         self.blinkOn = 2
         self.resetBit = False
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
     def btnClick(self):
-        # red = QColor(255, 0, 0, 255)
-        # green = QColor(0, 255, 0, 255)
-        # blue = QColor(0, 0, 255, 255)
-        # colors = [red, red, red]
-
-        # self.autoclicker.setColor(colors[self.ind])
+        self.blinkOn = 2
         self.autoclicker.setColor(self.onColor)
-        # self.ind = (self.ind + 1) % len(colors)
 
         time.sleep(self.on_time - self.blink_time)
         self.blink()
@@ -98,8 +93,9 @@ class AutoClickerAnimation(QWidget):
             time.sleep(dt)
             self.blinkVar = self.blink_speed
             self.blinkOn = (self.blinkOn - 1) % 3
+            print(f"blink state: {self.blinkOn} for clicker {self.ind}")
 
-            new_color = self.color
+            new_color = self.autoclicker.color
 
             if self.blinkOn == 0:
                 new_color.setAlpha(30)
