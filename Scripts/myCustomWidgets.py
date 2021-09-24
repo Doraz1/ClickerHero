@@ -6,14 +6,20 @@ import time
 from Scripts.threads import ClickerBlinkThread
 import numpy as np
 
+
 class AutoClicker(QWidget):
-    transparentColor = QColor(50, 50, 50, 30)
+    # transparentColor = QColor(50, 50, 50, 30)
+    onColor = QColor(255, 0, 0, 255)
+    offColor = QColor(42, 13, 0, 255)
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.color = 'black'
+        self.color = self.offColor
         self.parent = parent
+
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+        self.isClicked = False
+        self.leds_active = False
 
     def sizeHint(self):
         return QtCore.QSize(60, 120)
@@ -24,7 +30,9 @@ class AutoClicker(QWidget):
 
     def mousePressEvent(self, e):
         # click
-        self.setColor(self.transparentColor)
+        if self.leds_active:
+            self.setColor(self.offColor)
+            self.leds_active = False
 
     def setColor(self, color):
         self.color = color
@@ -42,80 +50,75 @@ class AutoClicker(QWidget):
 
         painter = QPainter(self)
         rect = QtCore.QRect(0, 0, painter.device().width(), painter.device().height())
-        # rect = QtCore.QRect(0, 0, width, height)
         painter.fillRect(rect, brush)
 
 
 class AutoClickerAnimation(QWidget):
-    """
-    Custom Qt Widget to show a power bar and dial.
-    Demonstrating compound and custom-drawn widget.
-    """
     blink_speed = 16
-    on_time = 3  # sec
-    blink_time = 1.5  # sec
-    onColor = QColor(255, 0, 0, 255)
-    offColor = QColor(42, 13, 0, 255)
+    on_time = 2  # sec
+    blink_time = 1  # sec
 
     def __init__(self, ind):
         super(AutoClickerAnimation, self).__init__()
-        self.color = self.onColor
-        layout = QVBoxLayout()
+
         self.autoclicker = AutoClicker(self)
+        layout = QVBoxLayout()
         layout.addWidget(self.autoclicker)
-
-        self.btn = QPushButton()
-        self.btn.clicked.connect(self.btnClick)
-        layout.addWidget(self.btn)
-
         self.setLayout(layout)
 
         self.ind = ind
-        self.numBlinkLevels = 8
-        self.blinkState = self.numBlinkLevels - 1
+
         self.resetBit = False
+
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
-        minLevel = 30
-        maxLevel = 255
+        self.numBlinkLevels = 8
+        self.blinkState = self.numBlinkLevels - 1
+        minLevel, maxLevel = 30, 255
         step = ((maxLevel - minLevel) / (self.numBlinkLevels - 1)) - 1
         self.alphaLevels = np.arange(30, 255, int(step), dtype=np.int32)
 
-    def btnClick(self):
+    def activateLEDs(self):
+        self.autoclicker.leds_active = True
+
         self.blinkState = self.numBlinkLevels - 1
-        color = self.onColor
+        color = self.autoclicker.onColor
         color.setAlpha(self.alphaLevels[self.blinkState])
         self.autoclicker.setColor(color)
-
         time.sleep(self.on_time - self.blink_time)
         self.blink()
 
     def blink(self):
         dt = 1/self.blink_speed
-        list = range(int(self.blink_time*self.blink_speed))
+        list = range(int(self.blink_time * self.blink_speed))
 
-        color = self.onColor
         for i in list:
             if self.resetBit:
                 self.resetBit = False
                 break
+            if not self.autoclicker.leds_active:
+                break
+
             time.sleep(dt)
 
             self.blinkState = (self.blinkState - 1) % self.numBlinkLevels
+
+            color = self.autoclicker.onColor
             color.setAlpha(self.alphaLevels[self.blinkState])
 
-            if not self.resetBit:
+            if not self.resetBit and self.autoclicker.leds_active:
                 self.autoclicker.setColor(color)
+        if self.ind == 0:
+            print(f"0: Exiting thread with alpha {self.alphaLevels[self.blinkState]}")
+        self.autoclicker.setColor(self.autoclicker.offColor)
+        self.autoclicker.leds_active = False
 
-        self.autoclicker.setColor(self.offColor)
 
     def reset(self):
         self.resetBit = True
-        # self.color = self.offColor
         self.ind = 0
         self.blinkState = self.numBlinkLevels - 1
-
 
 
 class ChangeUserList(QWidget):
@@ -130,21 +133,18 @@ class ChangeUserList(QWidget):
 
     def createList(self):
         # create layout
-        self.listWidget.setSelectionMode(
-            QtWidgets.QAbstractItemView.SingleSelection
-        )
+        self.listWidget.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.listWidget.setGeometry(QtCore.QRect(10, 10, 211, 291))
 
         # fetch player names and populate list
-        rows = self.database.load_all_players()
-
+        rows = self.database.load_all()
         for player in rows:
             firstName = player[0]
             lastName = player[1]
             item = QtWidgets.QListWidgetItem(f"{firstName} {lastName}")
             self.listWidget.addItem(item)
 
-        # on player choise - load player
+        # on player choice - load player
         self.listWidget.itemClicked.connect(self.loadPlayerFromList)
         self.layout.addWidget(self.listWidget)
 
@@ -172,8 +172,14 @@ class ChangeUserList(QWidget):
         playerLastName = getName("last")
         playerAge = getAge()
 
-        self.database.insert_person(playerFirstName, playerLastName, playerAge)
+        self.database.insert(playerFirstName, playerLastName, playerAge)
         self.loadPlayer(playerFirstName, playerLastName)
+
+    def loadPlayer(self, firstName, lastName):
+        self.database.load(firstName, lastName)
+        # close player menu
+        self.win.active_screen.show()
+        self.close()
 
     def loadPlayerFromList(self):
         chosen_players = self.listWidget.selectedItems()
@@ -183,19 +189,5 @@ class ChangeUserList(QWidget):
         lasttName = name[1]
         self.loadPlayer(firstName, lasttName)
 
-    def loadPlayer(self, firstName, lastName):
-        self.database.load_person(firstName, lastName)
-
-        # close player menu
-        self.win.active_screen.show()
-        # self.win.show()
-        self.close()
 
 
-if __name__ == '__main__':
-    app = QApplication([])
-    # volume = PowerBar()
-    db = DataBase()
-    volume = ChangeUserList(app, db)
-    volume.show()
-    app.exec_()

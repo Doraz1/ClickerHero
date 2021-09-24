@@ -16,9 +16,18 @@ class Screen:
     lbl_width = 1500
     lbl_height = 140
     lbl_margin_y = 50
-    lbl_text_color = rgb_to_hex((150, 200, 80))
+    lbl_text_color = rgb_to_hex((232, 225, 225))
     lbl_bg_color = Qt.transparent
-    lbl_text_font = QFont('Times', 55, QFont.Bold)
+    lbl_text_font = QFont('MV Boli', 70, QFont.Bold) # pristina, ravie
+
+    # song choice label style
+    song_choice_lbl_width = 310
+    song_choice_lbl_text_font = QFont('Times', 20, QFont.Bold)
+    song_choice_lbl_text_color = rgb_to_hex((180, 180, 255))
+    song_choice_lbl_margin_y = 80
+
+    # score screen label style
+    score_text_color = rgb_to_hex((102, 204, 102))
 
     # Button style
     btn_color = rgb_to_hex((240, 240, 240))
@@ -82,7 +91,38 @@ class Screen:
                           "margin: 2px;")
         lbl.setAlignment(Qt.AlignCenter)
 
+    def stylize_song_choice_lbl(self, lbl, pos_x, pos_y, text=""):
+        lbl.setText(text)
+        lbl.setFont(self.song_choice_lbl_text_font)
+
+        lbl.setGeometry(pos_x, pos_y, self.song_choice_lbl_width, self.lbl_height)
+        lbl.setStyleSheet(f"background-color: {self.lbl_bg_color}; "
+                          f"color: {self.song_choice_lbl_text_color};"
+                          "border: 0px;"
+                          "text-align: center;"
+                          "opacity: 255;"  # 0-255
+                          )
+        lbl.setAlignment(Qt.AlignLeft)
+
     def stylize_btn(self, btn, pos_x, pos_y, logic, text=""):
+        # self.closeButton.setShortcut('Ctrl+D')  # shortcut key
+        # self.closeButton.setToolTip("Close the widget")  # Tool tip
+
+        btn.setText(text)
+        btn.clicked.connect(logic)
+
+        btn.setFont(self.btn_text_font)
+        btn.setGeometry(pos_x, pos_y, self.btn_width, self.btn_height)
+        btn.setStyleSheet(f"background-color: {self.btn_bg_color}; "
+                          f"color: {self.btn_text_color};"
+                          "border-radius: 10;"
+                          "border: 1px solid black;"
+                          "text-align: center;"
+                          "opacity: 255;"  # 0-255
+                          "padding: 3px;"
+                          "margin: 2px;")
+
+    def stylize_song_choice_btn(self, btn, pos_x, pos_y, logic, text=""):
         # self.closeButton.setShortcut('Ctrl+D')  # shortcut key
         # self.closeButton.setToolTip("Close the widget")  # Tool tip
 
@@ -99,6 +139,11 @@ class Screen:
                           "opacity: 255;"  # 0-255
                           "padding: 3px;"
                           "margin: 2px;")
+
+        label_score = QLabel(btn)
+        lbl_pos_x = self.btn_width - self.song_choice_lbl_width
+        lbl_pos_y = self.song_choice_lbl_margin_y
+        self.stylize_song_choice_lbl(label_score, lbl_pos_x, lbl_pos_y, f"Top score: {self.win.song_score}")
 
     def stylize_progress_bar(self, bar):
         prog_width = 800
@@ -178,7 +223,7 @@ class SecondScreen(Screen):
         dy = self.btn_height + self.btn_margin_y
 
         button_start = QPushButton(self.win)
-        self.stylize_btn(button_start, btn_x, btn_y, self.win.btn_choose_song, "One kiss")
+        self.stylize_song_choice_btn(button_start, btn_x, btn_y, self.win.btn_choose_song, "One kiss")
         self.buttons.append(button_start)
 
         button_return_to_main = QPushButton(self.win)
@@ -195,7 +240,7 @@ class GameScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "BG_game.jpg"
+        bg_image_path = os.path.join(ASSET_PATH, "bg_game.jpg")
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -224,7 +269,8 @@ class ScoreScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = os.path.join(ASSET_PATH, "BG_score.jfif")
+        bg_image_path = ASSET_PATH + "BG_score.jpg"
+
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -232,6 +278,8 @@ class ScoreScreen(Screen):
         # Labels
         label_good_job = QLabel(self.win)
         self.stylize_lbl(label_good_job, int((self.win.width - self.lbl_width) / 2), 130, "כל הכבוד!")
+        label_good_job.setStyleSheet(f"color: {Screen.score_text_color};"
+)
         self.labels.append(label_good_job)
 
         # Buttons

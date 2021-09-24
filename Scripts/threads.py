@@ -13,7 +13,7 @@ class ClickerBlinkThread(QThread):
 
     def run(self):
         self.threadactive = True
-        self.clicker.btnClick()
+        self.clicker.activateLEDs()
         self.stop()
 
     def stop(self):
@@ -50,30 +50,25 @@ class ACBlinkThread(QThread):
         self.clicker = win.screens['game'].autoClickerAnimations[clicker_number - 1]
         self.bpm = bpm
         self.notes = notes
-        self.blinkThread = ClickerBlinkThread(self, self.clicker)
+        self.blinkThread = ClickerBlinkThread(win, self.clicker)
 
         self.threadactive = False
 
     def run(self):
         self.threadactive = True
 
-        # clicker animation constants
         start_time = time.time()
-        beats_per_sec = self.bpm / 60  # 2
-        dt = 1 / beats_per_sec  # every this many seconds
-        light_up_times = np.arange(0, self.win.total_song_length, dt)  # 1.9sec, 3.8sec, etc.
         iteration = 1
         note_ind = 0
+
         while self.win.running and self.threadactive:
-            time_to_sleep = start_time - time.time() + light_up_times[iteration]
+            time_to_sleep = start_time - time.time() + self.win.note_times[iteration]
             time.sleep(time_to_sleep)
             next_note = self.notes[note_ind]
-
             if next_note == iteration:
                 prev_note = next_note
                 note_ind += 1
                 next_note = self.notes[note_ind]
-                print(f"Hit it on note {prev_note}! Upcoming note: {next_note}\n")
                 self.blinkThread.start()
             iteration += 1
 
@@ -120,23 +115,24 @@ class ACMoveThread(QThread):
         center_of_rot_3 = (ac3_x - r, ac3_y)  # Center of Rotation
 
         while self.win.running:
-            # #animations
-            if noise == 0:
-                rand = [0, 0, 0, 0, 0, 0]
-            else:
-                rand = np.random.randint(-noise, noise, 6)
+            if not self.win.paused:
+                # #animations
+                if noise == 0:
+                    rand = [0, 0, 0, 0, 0, 0]
+                else:
+                    rand = np.random.randint(-noise, noise, 6)
 
-            x1 = center_of_rot_1[0] + r * np.cos(angle) + rand[0]
-            y1 = center_of_rot_1[1] - r * np.sin(angle) + rand[1]
-            x2 = center_of_rot_2[0] + r * np.cos(angle) + rand[2]
-            y2 = center_of_rot_2[1] - r * np.sin(angle) + rand[3]
-            x3 = center_of_rot_3[0] + r * np.cos(angle) + rand[4]
-            y3 = center_of_rot_3[1] - r * np.sin(angle) + rand[5]
-            #
-            angle = (angle + omega * dt) % 360
-            self.clicker_pos.emit(int(x1), int(y1), 0) # index 0
-            self.clicker_pos.emit(int(x2), int(y2), 1) # index 1
-            self.clicker_pos.emit(int(x3), int(y3), 2) # index 2
+                x1 = center_of_rot_1[0] + r * np.cos(angle) + rand[0]
+                y1 = center_of_rot_1[1] - r * np.sin(angle) + rand[1]
+                x2 = center_of_rot_2[0] + r * np.cos(angle) + rand[2]
+                y2 = center_of_rot_2[1] - r * np.sin(angle) + rand[3]
+                x3 = center_of_rot_3[0] + r * np.cos(angle) + rand[4]
+                y3 = center_of_rot_3[1] - r * np.sin(angle) + rand[5]
+                #
+                angle = (angle + omega * dt) % 360
+                self.clicker_pos.emit(int(x1), int(y1), 0) # index 0
+                self.clicker_pos.emit(int(x2), int(y2), 1) # index 1
+                self.clicker_pos.emit(int(x3), int(y3), 2) # index 2
 
             time.sleep(dt)
 

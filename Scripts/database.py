@@ -9,173 +9,108 @@ class PlayerDataBase():
         self.firstName = ""
         self.lastName = ""
         self.age = -1
-        self.score = -1
+        self.scores = []
 
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
+        query = f"""CREATE TABLE IF NOT EXISTS {self.topic} 
+                    (first_name TEXT, 
+                    last_name TEXT, 
+                    age INTEGER, 
+                    song1_score FLOAT, 
+                    song2_score FLOAT)"""
 
-        self.cursor.execute(f"""
-                               CREATE TABLE IF NOT EXISTS {self.topic} (
-                                first_name TEXT,
-                                last_name TEXT,
-                                age INTEGER,
-                                score FLOAT
-                                )""")
+        self.execute_query(query)
 
-        self.connection.commit()
-        self.connection.close()
-
-    def load_person(self, first_name, last_name):
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
-
-        self.cursor.execute(f"""
-               SELECT * FROM {self.topic}
-               WHERE first_name = '{first_name}' AND last_name = '{last_name}'
-                """)
-        rows = self.cursor.fetchone()
-
-        if rows is not None:
-            self.firstName = rows[0]
-            self.lastName = rows[1]
-            self.age = rows[2]
-            self.score = rows[3]
-
+    def load(self, first_name, last_name):
+        query = f"""select * from {self.topic}
+                    where first_name = '{first_name}' and last_name = '{last_name}'"""
+        rows = self.execute_query(query, return_rows=True)
+        print(f"rows: {rows}")
+        if rows:
+            user = rows[0] # first user found
+            self.firstName = user[0]
+            self.lastName = user[1]
+            self.age = user[2]
+            self.scores = []
+            for song_score in user[3:]:
+                self.scores.append(song_score)
+            print(f"Loaded play profile of {self.firstName} {self.lastName}")
         else:
+            # empty list
             self.firstName = ""
             self.lastName = ""
             self.age = -1
-            self.score = -1
+            self.scores = []
 
-        print(f"Loaded play profile of {self.firstName} {self.lastName}")
-
-        self.connection.commit()
-        self.connection.close()
-
-    def load_all_players(self):
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
-
-        self.cursor.execute(f"""
-                            SELECT * FROM {self.topic}
-                             """)
-
-        rows = self.cursor.fetchall()
-
-        self.connection.commit()
-        self.connection.close()
+    def load_all(self):
+        query = f"""SELECT * FROM {self.topic}"""
+        rows = self.execute_query(query, return_rows=True)
 
         return rows
 
-    def insert_person(self, firstName, lastName, age):
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
-
-        self.cursor.execute(f"""
-                            INSERT INTO {self.topic} VALUES
-                             ('{firstName}', '{lastName}', {age}, 0.0 )
-                             """)
-
-        self.connection.commit()
-        self.connection.close()
-
-    def remove_person(self, first_name, last_name):
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
-
-        self.cursor.execute(f"""
-                            DELETE FROM {self.topic}
-                            WHERE first_name = '{first_name}' AND last_name = '{last_name}'
-                            """)
-
-        self.connection.commit()
-        self.connection.close()
-
-
-class SongDataBase():
-    topic = 'songs'
-    database_name = f'{topic}DB.db'
-
-    def __init__(self):
-        self.song_name = ""
-        self.song_file_name = ""
-        self.song_BPM = -1
-
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
-
-        self.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {self.topic} 
-                            (song_name TEXT, song_file_name TEXT, song_BPM INTEGER, special_beats LIST)""")
-
-        self.connection.commit()
-        self.connection.close()
-
-    def load_song(self, song_name):
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
-
-        self.cursor.execute(f"""SELECT * FROM {self.topic} WHERE song_name = '{song_name}'""")
-        rows = self.cursor.fetchone()
-
-        if rows is not None:
-            self.song_name = rows[0]
-            self.song_file_name = rows[1]
-            self.song_BPM = rows[2]
+    def insert(self, firstName, lastName, age):
+        self.load(firstName, lastName)
+        if self.firstName != "":
+            # player exists
+            print("---------------------------------\n"
+                  "Failed to insert new player:\n"
+                  "Player already exists in database!\n"
+                  "---------------------------------")
         else:
-            self.song_name = ""
-            self.song_file_name = ""
-            self.song_BPM = -1
+            print("---------------------------------\n"
+                  "Creating new player!\n"
+                  "---------------------------------")
+            query = f"""INSERT INTO  {self.topic}  VALUES
+                        ('{firstName}', '{lastName}', {age}, 0.0, 0.0 )"""
 
-        print(f"Loaded song data of {self.song_name}")
+            self.execute_query(query)
 
-        self.connection.commit()
-        self.connection.close()
+    def remove(self, first_name, last_name):
+        query = f"""delete from {self.topic}
+                    where first_name = '{first_name}' and last_name = '{last_name}'"""
 
-    def load_all_songs(self):
+        self.execute_query(query)
+
+    def update_score(self, first_name, last_name, song_name, new_score):
+        query = f"""SELECT {song_name}_score FROM {self.topic}
+               WHERE first_name = '{first_name}' AND last_name = '{last_name}'"""
+        song_score = self.execute_query(query, return_rows=True)[0][0]
+        if song_score <= new_score:
+            query = f"""Update {self.topic}
+                            set {song_name}_score = {new_score}
+                            where first_name = '{first_name}' and last_name = '{last_name}'"""
+
+            self.execute_query(query)
+        else:
+            print("---------------------------------\n"
+                  "Failed to update player score:\n"
+                  "Player high score exceeds current performance!\n"
+                  "---------------------------------")
+
+    def execute_query(self, query, return_rows = False):
         self.connection = sql.connect(self.database_name)
         self.cursor = self.connection.cursor()
 
-        self.cursor.execute(f"""SELECT * FROM {self.topic}""")
-
+        self.cursor.execute(query)
+        self.connection.commit()
         rows = self.cursor.fetchall()
 
-        self.connection.commit()
         self.connection.close()
+        if return_rows:
+            return rows
 
-        return rows
+    def delete_whole_database(self):
+        query = f"""delete from {self.topic}"""
+        self.execute_query(query)
 
-    def insert_song(self, song_name, song_file_name, song_BPM, song_special_beats_list):
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
 
-        self.cursor.execute(f"""INSERT INTO {self.topic} VALUES('{song_name}', '{song_file_name}', {song_BPM}, 0.0 )""")
-
-        self.connection.commit()
-        self.connection.close()
-
-    def remove_song(self, song_name):
-        self.connection = sql.connect(self.database_name)
-        self.cursor = self.connection.cursor()
-
-        self.cursor.execute(f"""
-                            DELETE FROM {self.topic}
-                            WHERE song_name = '{song_name}'
-                            """)
-
-        self.connection.commit()
-        self.connection.close()
 
 
 if __name__ == '__main__':
     db = PlayerDataBase()
-    db.insert_person("Guy", "Zeidner", 38)
-    db.insert_person("Guy", "Pitner", 48)
-    db.load_person("*", "*")
-    # db.remove_person("Guy", "Zeidner)
-
-    # db = SongDataBase()
-    # db.insert_song("Guy song", "path_to_guy", 138, )
-    # db.load_song("Guy song")
-    # print(db.song_BPM)
-
-
+    # db.insert("Guy", "Pit", 38)
+    rows = db.load_all()
+    for row in rows:
+        print(row)
+    db.update_score("Guy", "Pit", "song2", 490.0)
+    # db.delete_whole_database()
+    rows = db.load_all()
