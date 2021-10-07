@@ -20,6 +20,7 @@ class AutoClicker(QWidget):
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         self.isClicked = False
         self.leds_active = False
+        self.score = 0
 
     def sizeHint(self):
         return QtCore.QSize(60, 120)
@@ -33,6 +34,7 @@ class AutoClicker(QWidget):
         if self.leds_active:
             self.setColor(self.offColor)
             self.leds_active = False
+            self.score += 1
 
     def setColor(self, color):
         self.color = color
@@ -109,14 +111,14 @@ class AutoClickerAnimation(QWidget):
 
             if not self.resetBit and self.autoclicker.leds_active:
                 self.autoclicker.setColor(color)
-        if self.ind == 0:
-            print(f"0: Exiting thread with alpha {self.alphaLevels[self.blinkState]}")
         self.autoclicker.setColor(self.autoclicker.offColor)
         self.autoclicker.leds_active = False
 
 
     def reset(self):
         self.resetBit = True
+        self.autoclicker.score = 0
+
         self.ind = 0
         self.blinkState = self.numBlinkLevels - 1
 
@@ -177,6 +179,7 @@ class ChangeUserList(QWidget):
 
     def loadPlayer(self, firstName, lastName):
         self.database.load(firstName, lastName)
+
         # close player menu
         self.win.active_screen.show()
         self.close()

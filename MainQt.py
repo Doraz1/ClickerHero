@@ -33,7 +33,7 @@ class MyWindow(QMainWindow):
 
         # Database
         self.playerDataBase = PlayerDataBase()
-        self.song_score = -1
+        self.score = -1
 
         # Set screen title, icon and application style
         self.setWindowTitle(title)
@@ -52,6 +52,7 @@ class MyWindow(QMainWindow):
                         }
 
         # song parameters and definitions
+        self.song_name = ""
         self.audio = None
         self.total_song_length = -1
         self.beats_per_min = -1
@@ -76,7 +77,12 @@ class MyWindow(QMainWindow):
                 print(f"currently active: {screen.name}")
 
     # region Buttons
-    def btn_start_game(self):
+    def btn_move_to_song_choice_screen(self):
+        if self.playerDataBase.firstName == "" or self.playerDataBase.lastName == "":
+            self.btn_change_user()
+            if self.playerDataBase.firstName == "" or self.playerDataBase.lastName == "":
+                return
+
         pygame.mixer.quit()
         self.activate_screen("second")
 
@@ -106,9 +112,12 @@ class MyWindow(QMainWindow):
         self.activate_screen("score")
         pygame.mixer.music.fadeout(2000)
 
+        self.playerDataBase.update_score(self.song_name, self.score) # attempt to update based on currently active player
         self.resetGui()
 
     def btn_choose_song(self):
+        self.song_name = "song2"
+
         self.song_path = os.path.join(SONGS_PATH, "One Kiss_cropped.mp3")
         self.audio = MP3(self.song_path)
         self.beats_per_min = 123.3  # using audacity we got 123, updated a bit
@@ -132,7 +141,7 @@ class MyWindow(QMainWindow):
             # up to 430 iterations
             easyUp = ACBlinkThread.easierLevel
             ac1_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]  # notes only till song end
-            ac2_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]
+            ac2_notes = [easyUp * iter + 2 for iter in iters if iter<(iters[-1]//easyUp) + 1]
             ac3_notes = [easyUp * iter + 4 for iter in iters if iter<(iters[-1]//easyUp) + 1]
             notes.append(ac1_notes)
             notes.append(ac2_notes)
@@ -151,9 +160,11 @@ class MyWindow(QMainWindow):
             win.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
             win.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
 
+
+
         if self.first_run:
             # Create the threads and the autoclickers for the first time
-            self.first_run = False
+            # self.first_run = False
 
             self.progressBarThread = ProgressBarThread(self, pygame.mixer.music)
             self.progressBarThread.progress.connect(self.updateProgressBar)
@@ -161,6 +172,7 @@ class MyWindow(QMainWindow):
             auto_clicker1 = AutoClickerAnimation(0)
             auto_clicker2 = AutoClickerAnimation(1)
             auto_clicker3 = AutoClickerAnimation(2)
+            self.screens["game"].autoClickerAnimations = []
             self.screens["game"].autoClickerAnimations.append(auto_clicker1)
             self.screens["game"].autoClickerAnimations.append(auto_clicker2)
             self.screens["game"].autoClickerAnimations.append(auto_clicker3)
@@ -174,16 +186,7 @@ class MyWindow(QMainWindow):
 
             self.resetGuiThread = ResetGuiThread(self)
 
-        # move_clickers_to_initial_positions(self)
-        click_offset_x = 200
-        click_offset_y = 200
-
-        ac1_x, ac1_y = int(self.width / 2), int(self.height / 2)
-        ac2_x, ac2_y = int(self.width / 2) - click_offset_x, int(self.height / 2) + click_offset_y
-        ac3_x, ac3_y = int(self.width / 2) + click_offset_x, int(self.height / 2) + click_offset_y
-        self.screens["game"].autoClickerAnimations[0].move(ac1_x, ac1_y)
-        self.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
-        self.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
+        move_clickers_to_initial_positions(self)
 
         self.activate_screen("game")
 
@@ -203,12 +206,19 @@ class MyWindow(QMainWindow):
     def updateProgressBar(self, progress):
         self.screens['game'].progressBars[0].setValue(progress)
 
+        self.score = 0
+        for clickerAnimation in self.screens["game"].autoClickerAnimations:
+            clicker = clickerAnimation.autoclicker
+            self.score += clicker.score
+
+        self.screens['game'].show()
+
     def moveAutoClickers(self, x, y, index):
         self.screens['game'].autoClickerAnimations[index].move(x, y)
 
     def resetGui(self):
-        # self.resetGuiThread.start()
         self.running = False
+        self.score = 0
 
         self.killAllThreads()
         for clicker in self.screens["game"].autoClickerAnimations:

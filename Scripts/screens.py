@@ -15,7 +15,7 @@ class Screen:
     lbl_color = rgb_to_hex((180, 180, 255))
     lbl_width = 1500
     lbl_height = 140
-    lbl_margin_y = 50
+    lbl_margin_y = 35
     lbl_text_color = rgb_to_hex((232, 225, 225))
     lbl_bg_color = Qt.transparent
     lbl_text_font = QFont('MV Boli', 70, QFont.Bold) # pristina, ravie
@@ -39,13 +39,18 @@ class Screen:
     btn_text_color = rgb_to_hex((240, 240, 240))
     btn_bg_color = rgb_to_hex((100, 100, 255))
     btn_text_font = QFont('Times', 25, QFont.Bold)
+    btn_opacity = 30
 
     prog_bar_bg_color = rgb_to_hex((150, 120, 180))
+    prog_bar_width = 800
+    prog_bar_height = 150
+    prog_bar_margin_y = 5
 
     def __init__(self, win, name):
         self.win = win
         self.name = name
         self.labels = []
+        self.scoreButtonLabels = []
         self.buttons = []
         self.autoClickerAnimations = []
         self.progressBars = []
@@ -118,37 +123,22 @@ class Screen:
                           "border-radius: 10;"
                           "border: 1px solid black;"
                           "text-align: center;"
-                          "opacity: 255;"  # 0-255
+                          f"opacity: {self.btn_opacity};"  # 0-255
                           "padding: 3px;"
                           "margin: 2px;")
 
     def stylize_song_choice_btn(self, btn, pos_x, pos_y, logic, text=""):
-        # self.closeButton.setShortcut('Ctrl+D')  # shortcut key
-        # self.closeButton.setToolTip("Close the widget")  # Tool tip
-
-        btn.setText(text)
-        btn.clicked.connect(logic)
-
-        btn.setFont(self.btn_text_font)
-        btn.setGeometry(pos_x, pos_y, self.btn_width, self.btn_height)
-        btn.setStyleSheet(f"background-color: {self.btn_bg_color}; "
-                          f"color: {self.btn_text_color};"
-                          "border-radius: 10;"
-                          "border: 1px solid red;"
-                          "text-align: center;"
-                          "opacity: 255;"  # 0-255
-                          "padding: 3px;"
-                          "margin: 2px;")
+        self.stylize_btn(btn, pos_x, pos_y, logic, text)
 
         label_score = QLabel(btn)
         lbl_pos_x = self.btn_width - self.song_choice_lbl_width
         lbl_pos_y = self.song_choice_lbl_margin_y
-        self.stylize_song_choice_lbl(label_score, lbl_pos_x, lbl_pos_y, f"Top score: {self.win.song_score}")
+        self.stylize_song_choice_lbl(label_score, lbl_pos_x, lbl_pos_y, "Top score: 0.0")
+        self.scoreButtonLabels.append(label_score)
 
-    def stylize_progress_bar(self, bar):
-        prog_width = 800
-        prog_height = 150
-        bar.setGeometry(int((self.win.width - prog_width) / 2), 250, prog_width, prog_height)
+    def stylize_progress_bar(self, bar, pos_x, pos_y):
+
+        bar.setGeometry(pos_x, pos_y, self.prog_bar_width, self.prog_bar_height)
 
         bar.setAlignment(Qt.AlignCenter)
         bar.setFont(self.btn_text_font)
@@ -181,7 +171,7 @@ class MainScreen(Screen):
         dy = self.btn_height + self.btn_margin_y
 
         button_start = QPushButton(self.win)
-        self.stylize_btn(button_start, btn_x, btn_y, self.win.btn_start_game, "התחל משחק")
+        self.stylize_btn(button_start, btn_x, btn_y, self.win.btn_move_to_song_choice_screen, "התחל משחק")
         self.buttons.append(button_start)
 
         button_change_user = QPushButton(self.win)
@@ -230,6 +220,19 @@ class SecondScreen(Screen):
         self.stylize_btn(button_return_to_main, btn_x, btn_y + dy, self.win.btn_return_to_main, "חזרה לתפריט הראשי")
         self.buttons.append(button_return_to_main)
 
+    def show(self):
+        super().show()
+
+        player_scores = self.win.playerDataBase.scores
+        i = 0
+        for score in player_scores[1:]:
+            score_label = self.scoreButtonLabels[i]
+            text = f"Top Score: {score}"
+            score_label.setText(text)
+            i += 1
+            # add another label for the second song score
+            break
+
 
 class GameScreen(Screen):
 
@@ -250,14 +253,28 @@ class GameScreen(Screen):
         self.stylize_btn(button_pause, 0, 10, self.win.btn_pause_game, "P")
         self.buttons.append(button_pause)
 
+        exit_button_height = 10
         button_exit_to_main = QPushButton(self.win)
         end_of_screen_pos = self.win.width - self.btn_width
-        self.stylize_btn(button_exit_to_main, end_of_screen_pos, 10, self.win.btn_stop_game, "חזרה לתפריט הראשי")
+        self.stylize_btn(button_exit_to_main, end_of_screen_pos, exit_button_height, self.win.btn_stop_game, "חזרה לתפריט הראשי")
         self.buttons.append(button_exit_to_main)
 
+
+        score_lbl_height = exit_button_height + self.btn_height + self.prog_bar_margin_y
+        label_score = QLabel(self.win)
+        self.stylize_lbl(label_score, int((self.win.width - self.lbl_width) / 2), score_lbl_height, f"Score: {self.win.score}")
+        self.labels.append(label_score)
+
         progress_bar = QProgressBar(self.win)
-        self.stylize_progress_bar(progress_bar)
+        prog_bar_height = score_lbl_height + self.lbl_height + self.prog_bar_margin_y
+        self.stylize_progress_bar(progress_bar, int((self.win.width - self.prog_bar_width) / 2), prog_bar_height)
         self.progressBars.append(progress_bar)
+
+    def show(self):
+        super().show()
+
+        curr_score = self.win.score
+        self.labels[1].setText(f"Score: {curr_score}")  # score label
 
 
 class ScoreScreen(Screen):

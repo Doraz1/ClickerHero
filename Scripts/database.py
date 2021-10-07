@@ -24,7 +24,6 @@ class PlayerDataBase():
         query = f"""select * from {self.topic}
                     where first_name = '{first_name}' and last_name = '{last_name}'"""
         rows = self.execute_query(query, return_rows=True)
-        print(f"rows: {rows}")
         if rows:
             user = rows[0] # first user found
             self.firstName = user[0]
@@ -70,9 +69,13 @@ class PlayerDataBase():
 
         self.execute_query(query)
 
-    def update_score(self, first_name, last_name, song_name, new_score):
+    def update_score(self, song_name, new_score):
+        first_name = self.firstName
+        last_name = self.lastName
+
         query = f"""SELECT {song_name}_score FROM {self.topic}
                WHERE first_name = '{first_name}' AND last_name = '{last_name}'"""
+
         song_score = self.execute_query(query, return_rows=True)[0][0]
         if song_score <= new_score:
             query = f"""Update {self.topic}
@@ -80,11 +83,27 @@ class PlayerDataBase():
                             where first_name = '{first_name}' and last_name = '{last_name}'"""
 
             self.execute_query(query)
+
+            # update scores
+            query = f"""select * from {self.topic}
+                                where first_name = '{first_name}' and last_name = '{last_name}'"""
+            rows = self.execute_query(query, return_rows=True)
+            if rows:
+                user = rows[0]  # first user found
+                self.scores = []
+                for song_score in user[3:]:
+                    self.scores.append(song_score)
+
+            print("---------------------------------\n"
+                  "Congratulations! New record score!\n"
+                  f"Player high score: {new_score} exceeds current performance: {song_score}!\n"
+                  "---------------------------------")
         else:
             print("---------------------------------\n"
-                  "Failed to update player score:\n"
-                  "Player high score exceeds current performance!\n"
+                  "Didn't beat top score. Better luck next time!"
                   "---------------------------------")
+
+
 
     def execute_query(self, query, return_rows = False):
         self.connection = sql.connect(self.database_name)

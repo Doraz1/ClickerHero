@@ -2,7 +2,7 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import QThread
 import time
 import numpy as np
-
+import pyautogui
 
 class ClickerBlinkThread(QThread):
     def __init__(self, win, clicker):
@@ -18,7 +18,7 @@ class ClickerBlinkThread(QThread):
 
     def stop(self):
         self.threadactive = False
-        # self.clicker.reset()
+        self.clicker.reset()
         self.quit()
 
 class ResetGuiThread(QThread):
@@ -94,12 +94,78 @@ class ACMoveThread(QThread):
 
     def run(self):
         self.threadactive = True
+        self.move_ants()
+        # self.move_circular()
+
+    def move_ants(self):
+        def update_x(curr_x, a_x):
+            new_x = curr_x + 0.5 * a_x * (dt ** 2)
+            if new_x > max_x:
+                new_x = max_x
+            elif new_x < min_x:
+                new_x = min_x
+            return new_x
+
+        def update_y(curr_y, a_y):
+            new_y = curr_y + 0.5 * a_y * (dt ** 2)
+            if new_y > max_y:
+                new_y = max_y
+            elif new_y < min_y:
+                new_y = min_y
+            return new_y
 
         # clicker animation constants
-        r = 80
+        noise = 100
+        dt = 0.05
+        size = pyautogui.size()
+        max_x, max_y = size[0] - 50, size[1] - 150
+        min_x, min_y = 10, 450
+
+        geo1 = self.clicker1.geometry()  # QRect
+        x1_0, y1_0 = geo1.x(), geo1.y()
+
+        geo2 = self.clicker2.geometry()
+        x2_0, y2_0 = geo2.x(), geo2.y()
+
+        geo3 = self.clicker3.geometry()
+        x3_0, y3_0 = geo3.x(), geo3.y()
+
+        x1, y1, x2, y2, x3, y3 = x1_0, y1_0, x2_0, y2_0, x3_0, y3_0
+        a1_x, a1_y, a2_x, a2_y, a3_x, a3_y = 0, 0, 0, 0, 0, 0
+        while self.win.running:
+            if not self.win.paused:
+                # #animations
+                if noise == 0:
+                    rand = [0, 0, 0, 0, 0, 0]
+                else:
+                    rand = np.random.randint(-noise, noise, 6)
+
+                a1_x += rand[0]
+                a1_y += rand[1]
+                a2_x += rand[2]
+                a2_y += rand[3]
+                a3_x += rand[4]
+                a3_y += rand[5]
+
+                x1 = update_x(x1, a1_x)
+                y1 = update_y(y1, a1_y)
+                x2 = update_x(x2, a2_x)
+                y2 = update_y(y2, a2_y)
+                x3 = update_x(x3, a3_x)
+                y3 = update_y(y3, a3_y)
+
+                self.clicker_pos.emit(int(x1), int(y1), 0)  # index 0
+                self.clicker_pos.emit(int(x2), int(y2), 1)  # index 1
+                self.clicker_pos.emit(int(x3), int(y3), 2)  # index 2
+
+            time.sleep(dt)
+
+    def move_circular(self):
+        # clicker animation constants
+        r = 90
         angle = np.radians(90)
-        omega = 1
-        noise = 0
+        omega = 0.3
+        noise = 10
         dt = 0.05
 
         geo1 = self.clicker1.geometry()  # QRect
@@ -122,17 +188,17 @@ class ACMoveThread(QThread):
                 else:
                     rand = np.random.randint(-noise, noise, 6)
 
-                x1 = center_of_rot_1[0] + r * np.cos(angle) + rand[0]
-                y1 = center_of_rot_1[1] - r * np.sin(angle) + rand[1]
-                x2 = center_of_rot_2[0] + r * np.cos(angle) + rand[2]
-                y2 = center_of_rot_2[1] - r * np.sin(angle) + rand[3]
-                x3 = center_of_rot_3[0] + r * np.cos(angle) + rand[4]
-                y3 = center_of_rot_3[1] - r * np.sin(angle) + rand[5]
+                x1 = center_of_rot_1[0] + (r + rand[0]) * np.cos(angle)
+                y1 = center_of_rot_1[1] - (r + rand[1]) * np.sin(angle)
+                x2 = center_of_rot_2[0] + (r + rand[2]) * np.cos(angle)
+                y2 = center_of_rot_2[1] - (r + rand[3]) * np.sin(angle)
+                x3 = center_of_rot_3[0] + (r + rand[4]) * np.cos(angle)
+                y3 = center_of_rot_3[1] - (r + rand[5]) * np.sin(angle)
                 #
                 angle = (angle + omega * dt) % 360
-                self.clicker_pos.emit(int(x1), int(y1), 0) # index 0
-                self.clicker_pos.emit(int(x2), int(y2), 1) # index 1
-                self.clicker_pos.emit(int(x3), int(y3), 2) # index 2
+                self.clicker_pos.emit(int(x1), int(y1), 0)  # index 0
+                self.clicker_pos.emit(int(x2), int(y2), 1)  # index 1
+                self.clicker_pos.emit(int(x3), int(y3), 2)  # index 2
 
             time.sleep(dt)
 
@@ -142,7 +208,7 @@ class ACMoveThread(QThread):
 
 
 class ProgressBarThread(QThread):
-    dt = 1  # sec
+    dt = 0.2  # sec
     progress = QtCore.pyqtSignal(int)
 
     def __init__(self, win, music):
