@@ -18,7 +18,7 @@ class ClickerBlinkThread(QThread):
 
     def stop(self):
         self.threadactive = False
-        self.clicker.reset()
+        # self.clicker.resetBlink()
         self.quit()
 
 class ResetGuiThread(QThread):
@@ -28,11 +28,11 @@ class ResetGuiThread(QThread):
         self.threadactive = False
 
     def run(self):
-        print("entered gui rset thread")
+        print("entered gui reset thread")
         self.threadactive = True
         self.win.killAllThreads()
         for clicker in self.win.screens["game"].autoClickerAnimations:
-            clicker.reset()
+            clicker.resetBlink()
 
         self.stop()
 
@@ -89,9 +89,6 @@ class ACMoveThread(QThread):
         self.threadactive = False
 
 
-    def __del__(self):
-        self.wait()
-
     def run(self):
         self.threadactive = True
         self.move_ants()
@@ -117,8 +114,8 @@ class ACMoveThread(QThread):
         # clicker animation constants
         noise = 100
         dt = 0.05
-        size = pyautogui.size()
-        max_x, max_y = size[0] - 50, size[1] - 150
+        screen_w, screen_h = pyautogui.size()
+        max_x, max_y = screen_w - 180, screen_h - 150
         min_x, min_y = 10, 450
 
         geo1 = self.clicker1.geometry()  # QRect

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import Qt
 from webcolors import rgb_to_hex
+import cv2
 
 ASSET_PATH = r'Assets/'
 
@@ -16,8 +17,9 @@ class Screen:
     lbl_width = 1500
     lbl_height = 140
     lbl_margin_y = 35
-    lbl_text_color = rgb_to_hex((232, 225, 225))
-    lbl_bg_color = Qt.transparent
+    lbl_text_color = rgb_to_hex((255, 255, 255))
+    # lbl_bg_color = Qt.transparent
+    lbl_bg_color = "(0, 0, 0, 0.2)"
     lbl_text_font = QFont('MV Boli', 70, QFont.Bold) # pristina, ravie
 
     # song choice label style
@@ -88,7 +90,8 @@ class Screen:
         lbl.setText(text)
         lbl.setFont(self.lbl_text_font)
         lbl.setGeometry(pos_x, pos_y, self.lbl_width, self.lbl_height)
-        lbl.setStyleSheet(f"background-color: {self.lbl_bg_color}; "
+        lbl.setStyleSheet(f"background-color: rgba{self.lbl_bg_color};"
+                          f"opacity: 255;"  # 0-255
                           f"color: {self.lbl_text_color};"
                           "text-align: center;"
                           "opacity: 255;"  # 0-255
@@ -174,9 +177,9 @@ class MainScreen(Screen):
         self.stylize_btn(button_start, btn_x, btn_y, self.win.btn_move_to_song_choice_screen, "התחל משחק")
         self.buttons.append(button_start)
 
-        button_change_user = QPushButton(self.win)
-        self.stylize_btn(button_change_user, btn_x, btn_y + dy, self.win.btn_change_user, "החלף משתמש")
-        self.buttons.append(button_change_user)
+        button_instructions = QPushButton(self.win)
+        self.stylize_btn(button_instructions, btn_x, btn_y + dy, self.win.btn_instructions, "הוראות")
+        self.buttons.append(button_instructions)
 
         button_exit = QPushButton(self.win)
         self.stylize_btn(button_exit, btn_x, btn_y + 2*dy, self.win.btn_exit, "יציאה")
@@ -192,6 +195,43 @@ class MainScreen(Screen):
             welcome_string = f"Welcome, {player_name}!"
 
         self.labels[1].setText(welcome_string)  # welcome label
+
+class InstructionsScreen(Screen):
+    def __init__(self, win, name):
+        super().__init__(win, name)
+        self.create_screen()
+        self.hide()
+
+    def create_screen(self):
+        # Background
+        bg_image_path = ASSET_PATH + "BG_main.jpg"
+        bg_label = QLabel(self.win)
+        self.create_background(bg_label, bg_image_path)
+        self.labels.append(bg_label)
+
+        # Labels
+        label_instructions = QLabel(self.win)
+        text = "In this game, you have robots named AutoClickers.\n" \
+               "\n" \
+               "The AutoClickers will move around and light up in colors according to the \nbeat of the song.\n" \
+               "\n" \
+               "When the robots are lit up, they are clickable. Clicking them will award \nyou points. \n" \
+               "\n" \
+               "The goal of the game is to earn as many points as possible for all songs.\n" \
+               "Good luck and have fun!"
+        self.stylize_lbl(label_instructions, int((self.win.width - self.lbl_width)/2), 30, text)
+        label_instructions.setFont(QFont('MV Boli', 30, QFont.Bold))
+        label_instructions.setGeometry(30, 30, self.win.width - 30, self.win.height - 30)
+        label_instructions.setAlignment(Qt.AlignLeft)
+        self.labels.append(label_instructions)
+
+        # Buttons
+        btn_x, btn_y = int((self.win.width - self.btn_width) / 2), self.btn_initial_y  # first button coordinates
+        dy = self.btn_height + self.btn_margin_y
+
+        button_return_to_main = QPushButton(self.win)
+        self.stylize_btn(button_return_to_main, btn_x, btn_y + 3*dy, self.win.btn_return_to_main, "חזרה לתפריט הראשי")
+        self.buttons.append(button_return_to_main)
 
 
 class SecondScreen(Screen):

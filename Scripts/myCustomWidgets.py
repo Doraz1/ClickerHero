@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QPushButton, QApp
 from PyQt5.QtGui import QColor, QRegion, QPainter, QBrush
 from PyQt5.QtCore import Qt, QRect
 import time
-from Scripts.threads import ClickerBlinkThread
 import numpy as np
 
 
@@ -92,13 +91,13 @@ class AutoClickerAnimation(QWidget):
         self.blink()
 
     def blink(self):
+        print("now blink!")
         dt = 1/self.blink_speed
         list = range(int(self.blink_time * self.blink_speed))
-
         for i in list:
-            if self.resetBit:
-                self.resetBit = False
-                break
+            # if self.resetBit:
+            #     self.resetBit = False
+            #     break
             if not self.autoclicker.leds_active:
                 break
 
@@ -111,14 +110,13 @@ class AutoClickerAnimation(QWidget):
 
             if not self.resetBit and self.autoclicker.leds_active:
                 self.autoclicker.setColor(color)
+
+        self.resetBlink()
+
+    def resetBlink(self):
+        # self.resetBit = True
         self.autoclicker.setColor(self.autoclicker.offColor)
         self.autoclicker.leds_active = False
-
-
-    def reset(self):
-        self.resetBit = True
-        self.autoclicker.score = 0
-
         self.ind = 0
         self.blinkState = self.numBlinkLevels - 1
 

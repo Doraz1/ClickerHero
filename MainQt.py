@@ -12,7 +12,7 @@ from mutagen.mp3 import MP3
 from Scripts.myCustomWidgets import AutoClickerAnimation, ChangeUserList
 from Scripts.database import PlayerDataBase
 from Scripts.threads import ProgressBarThread, ACMoveThread, ACBlinkThread, ResetGuiThread
-from Scripts.screens import MainScreen, SecondScreen, GameScreen, ScoreScreen
+from Scripts.screens import MainScreen, InstructionsScreen, SecondScreen, GameScreen, ScoreScreen
 import numpy as np
 
 # region init
@@ -42,10 +42,13 @@ class MyWindow(QMainWindow):
         # Define the different screens
         self.active_screen = None
         main_screen = MainScreen(self, "Main Menu Screen")
+        instructions_screen = InstructionsScreen(self, "Instructions Screen")
         secondary_screen = SecondScreen(self, "Secondary Menu Screen")
         game_screen = GameScreen(self, "Game Screen")
         score_screen = ScoreScreen(self, "Score Screen")
+
         self.screens = {'main': main_screen,
+                        'instructions': instructions_screen,
                         'second': secondary_screen,
                         'game': game_screen,
                         'score': score_screen
@@ -92,6 +95,11 @@ class MyWindow(QMainWindow):
     def btn_change_user(self):
         self.user_list = ChangeUserList(self, self.playerDataBase)
         self.user_list.show()
+
+    def btn_instructions(self):
+        self.activate_screen("instructions")
+
+
 
     def btn_exit(self):
         button_reply = QMessageBox.question(self, 'PyQt5 message', "Exit the application?",
@@ -222,7 +230,8 @@ class MyWindow(QMainWindow):
 
         self.killAllThreads()
         for clicker in self.screens["game"].autoClickerAnimations:
-            clicker.reset()
+            clicker.resetBlink()
+            clicker.score = 0
 
     def killAllThreads(self):
         self.progressBarThread.stop()
