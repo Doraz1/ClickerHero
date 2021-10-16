@@ -217,7 +217,7 @@ class MyWindow(QMainWindow):
         self.score = 0
         for clickerAnimation in self.screens["game"].autoClickerAnimations:
             clicker = clickerAnimation.autoclicker
-            self.score += clicker.score
+            self.score += 15 * clicker.score
 
         self.screens['game'].show()
 

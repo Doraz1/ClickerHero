@@ -7,18 +7,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import Qt
 from webcolors import rgb_to_hex
-import cv2
 
 ASSET_PATH = r'Assets/'
 
 class Screen:
+    transparent_color = Qt.transparent
+
     # Label style
     lbl_color = rgb_to_hex((180, 180, 255))
     lbl_width = 1500
     lbl_height = 140
     lbl_margin_y = 35
     lbl_text_color = rgb_to_hex((255, 255, 255))
-    # lbl_bg_color = Qt.transparent
     lbl_bg_color = "(0, 0, 0, 0.2)"
     lbl_text_font = QFont('MV Boli', 70, QFont.Bold) # pristina, ravie
 
@@ -32,14 +32,16 @@ class Screen:
     score_text_color = rgb_to_hex((102, 204, 102))
 
     # Button style
-    btn_color = rgb_to_hex((240, 240, 240))
+    btn_color = "(100, 100, 255, 0.8)"
+
     btn_initial_y = 250
     btn_width = 700
     btn_height = 140
     btn_margin_x = 30
     btn_margin_y = 50
     btn_text_color = rgb_to_hex((240, 240, 240))
-    btn_bg_color = rgb_to_hex((100, 100, 255))
+    # btn_bg_color = rgb_to_hex((100, 100, 255))
+    btn_bg_color = "(100, 100, 255, 0.9)"
     btn_text_font = QFont('Times', 25, QFont.Bold)
     btn_opacity = 30
 
@@ -104,7 +106,7 @@ class Screen:
         lbl.setFont(self.song_choice_lbl_text_font)
 
         lbl.setGeometry(pos_x, pos_y, self.song_choice_lbl_width, self.lbl_height)
-        lbl.setStyleSheet(f"background-color: {self.lbl_bg_color}; "
+        lbl.setStyleSheet(f"background-color: {self.transparent_color}; "
                           f"color: {self.song_choice_lbl_text_color};"
                           "border: 0px;"
                           "text-align: center;"
@@ -121,7 +123,7 @@ class Screen:
 
         btn.setFont(self.btn_text_font)
         btn.setGeometry(pos_x, pos_y, self.btn_width, self.btn_height)
-        btn.setStyleSheet(f"background-color: {self.btn_bg_color}; "
+        btn.setStyleSheet(f"background-color: rgba{self.btn_bg_color}; "
                           f"color: {self.btn_text_color};"
                           "border-radius: 10;"
                           "border: 1px solid black;"

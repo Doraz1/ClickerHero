@@ -91,8 +91,8 @@ class ACMoveThread(QThread):
 
     def run(self):
         self.threadactive = True
-        self.move_ants()
-        # self.move_circular()
+        # self.move_ants()
+        self.move_circular()
 
     def move_ants(self):
         def update_x(curr_x, a_x):
@@ -162,7 +162,7 @@ class ACMoveThread(QThread):
         r = 90
         angle = np.radians(90)
         omega = 0.3
-        noise = 10
+        noise = 1
         dt = 0.05
 
         geo1 = self.clicker1.geometry()  # QRect
