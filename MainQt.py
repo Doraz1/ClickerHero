@@ -128,7 +128,7 @@ class MyWindow(QMainWindow):
 
         self.song_path = os.path.join(SONGS_PATH, "One Kiss_cropped.mp3")
         self.audio = MP3(self.song_path)
-        self.beats_per_min = 123.3  # using audacity we got 123, updated a bit
+        self.beats_per_min = 123.85  # using audacity we got 123, updated a bit
 
 
         notes = self.get_autoclicker_notes('one kiss')
@@ -157,58 +157,62 @@ class MyWindow(QMainWindow):
         return notes
 
     def begin_game(self, notes):
-        def move_clickers_to_initial_positions(win):
-            click_offset_x = 200
-            click_offset_y = 200
+        try:
+            def move_clickers_to_initial_positions(win):
+                click_offset_x = 200
+                click_offset_y = 200
 
-            ac1_x, ac1_y = int(self.width / 2), int(self.height / 2)
-            ac2_x, ac2_y = int(self.width / 2) - click_offset_x, int(self.height / 2) + click_offset_y
-            ac3_x, ac3_y = int(self.width / 2) + click_offset_x, int(self.height / 2) + click_offset_y
-            win.screens["game"].autoClickerAnimations[0].move(ac1_x, ac1_y)
-            win.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
-            win.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
+                ac1_x, ac1_y = int(self.width / 2), int(self.height / 2)
+                ac2_x, ac2_y = int(self.width / 2) - click_offset_x, int(self.height / 2) + click_offset_y
+                ac3_x, ac3_y = int(self.width / 2) + click_offset_x, int(self.height / 2) + click_offset_y
+                win.screens["game"].autoClickerAnimations[0].move(ac1_x, ac1_y)
+                win.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
+                win.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
 
 
 
-        if self.first_run:
-            # Create the threads and the autoclickers for the first time
-            # self.first_run = False
+            if self.first_run:
+                # Create the threads and the autoclickers for the first time
+                # self.first_run = False
 
-            self.progressBarThread = ProgressBarThread(self, pygame.mixer.music)
-            self.progressBarThread.progress.connect(self.updateProgressBar)
+                self.progressBarThread = ProgressBarThread(self, pygame.mixer.music)
+                self.progressBarThread.progress.connect(self.updateProgressBar)
 
-            auto_clicker1 = AutoClickerAnimation(0)
-            auto_clicker2 = AutoClickerAnimation(1)
-            auto_clicker3 = AutoClickerAnimation(2)
-            self.screens["game"].autoClickerAnimations = []
-            self.screens["game"].autoClickerAnimations.append(auto_clicker1)
-            self.screens["game"].autoClickerAnimations.append(auto_clicker2)
-            self.screens["game"].autoClickerAnimations.append(auto_clicker3)
+                auto_clicker1 = AutoClickerAnimation(0)
+                auto_clicker2 = AutoClickerAnimation(1)
+                auto_clicker3 = AutoClickerAnimation(2)
+                self.screens["game"].autoClickerAnimations = []
+                self.screens["game"].autoClickerAnimations.append(auto_clicker1)
+                self.screens["game"].autoClickerAnimations.append(auto_clicker2)
+                self.screens["game"].autoClickerAnimations.append(auto_clicker3)
 
-            self.clickerMoveThread = ACMoveThread(self)
-            self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
+                self.clickerMoveThread = ACMoveThread(self)
+                self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
 
-            self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
-            self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
-            self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
+                self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
+                self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
+                self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
 
-            self.resetGuiThread = ResetGuiThread(self)
+                self.resetGuiThread = ResetGuiThread(self)
 
-        move_clickers_to_initial_positions(self)
+            move_clickers_to_initial_positions(self)
 
-        self.activate_screen("game")
+            self.activate_screen("game")
 
-        self.running = True
+            self.running = True
 
-        pygame.mixer.init()  # init pygame mixer
-        pygame.mixer.music.load(self.song_path)  # charge la musique
-        pygame.mixer.music.play()
+            pygame.mixer.init()  # init pygame mixer
+            pygame.mixer.music.load(self.song_path)  # charge la musique
+            pygame.mixer.music.play()
 
-        self.progressBarThread.start()
-        self.clickerMoveThread.start()
-        self.clickerBlinkThread1.start()
-        self.clickerBlinkThread2.start()
-        self.clickerBlinkThread3.start()
+            self.progressBarThread.start()
+            self.clickerMoveThread.start()
+            self.clickerBlinkThread1.start()
+            self.clickerBlinkThread2.start()
+            self.clickerBlinkThread3.start()
+        except Exception as e:
+            print(e)
+            exit(-2)
 
     # region thread events
     def updateProgressBar(self, progress):
@@ -251,9 +255,14 @@ def launch_game():
     else:
         width, height = 1600, 900
 
-    MyWindow(width, height, "Clicker Hero")
+    try:
+        MyWindow(width, height, "Clicker Hero")
+        sys.exit(app.exec_())
+    except Exception as e:
+            print(e)
+            exit(1)
 
-    sys.exit(app.exec_())
+
 
 
 if __name__ == "__main__":

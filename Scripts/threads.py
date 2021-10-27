@@ -3,6 +3,7 @@ from PyQt5.QtCore import QThread
 import time
 import numpy as np
 import pyautogui
+from PyQt5.QtGui import QRegion
 
 class ClickerBlinkThread(QThread):
     def __init__(self, win, clicker):
@@ -12,9 +13,14 @@ class ClickerBlinkThread(QThread):
         self.threadactive = False
 
     def run(self):
-        self.threadactive = True
-        self.clicker.activateLEDs()
-        self.stop()
+        try:
+            self.threadactive = True
+            self.clicker.activateLEDs()
+            self.stop()
+        except Exception as e:
+            print(e)
+            exit(2)
+
 
     def stop(self):
         self.threadactive = False
@@ -28,13 +34,18 @@ class ResetGuiThread(QThread):
         self.threadactive = False
 
     def run(self):
-        print("entered gui reset thread")
-        self.threadactive = True
-        self.win.killAllThreads()
-        for clicker in self.win.screens["game"].autoClickerAnimations:
-            clicker.resetBlink()
+        try:
+            print("entered gui reset thread")
+            self.threadactive = True
+            self.win.killAllThreads()
+            for clicker in self.win.screens["game"].autoClickerAnimations:
+                clicker.resetBlink()
 
-        self.stop()
+            self.stop()
+        except Exception as e:
+            print(e)
+            exit(3)
+
 
     def stop(self):
         self.threadactive = False
@@ -55,27 +66,31 @@ class ACBlinkThread(QThread):
         self.threadactive = False
 
     def run(self):
-        self.threadactive = True
+        try:
+            self.threadactive = True
 
-        start_time = time.time()
-        iteration = 1
-        note_ind = 0
+            start_time = time.time()
+            iteration = 1
+            note_ind = 0
 
-        while self.win.running and self.threadactive:
-            time_to_sleep = start_time - time.time() + self.win.note_times[iteration]
-            time.sleep(time_to_sleep)
-            next_note = self.notes[note_ind]
-            if next_note == iteration:
-                prev_note = next_note
-                note_ind += 1
+            while self.win.running and self.threadactive:
+                time_to_sleep = start_time - time.time() + self.win.note_times[iteration]
+                time.sleep(time_to_sleep)
                 next_note = self.notes[note_ind]
-                self.blinkThread.start()
-            iteration += 1
+                if next_note == iteration:
+                    prev_note = next_note
+                    note_ind += 1
+                    next_note = self.notes[note_ind]
+                    self.blinkThread.start()
+                iteration += 1
+        except Exception as e:
+            print(e)
+            exit(4)
+
 
     def stop(self):
         self.threadactive = False
         self.quit()
-
 
 class ACMoveThread(QThread):
     clicker_pos = QtCore.pyqtSignal(int, int, int)
@@ -83,121 +98,104 @@ class ACMoveThread(QThread):
     def __init__(self, win):
         QThread.__init__(self)
         self.win = win
-        self.clicker1 = win.screens['game'].autoClickerAnimations[0]
-        self.clicker2 = win.screens['game'].autoClickerAnimations[1]
-        self.clicker3 = win.screens['game'].autoClickerAnimations[2]
+        clicker1Anim = win.screens['game'].autoClickerAnimations[0]
+        clicker2Anim = win.screens['game'].autoClickerAnimations[1]
+        clicker3Anim = win.screens['game'].autoClickerAnimations[2]
+
+        self.win = win
+        self.clickers = [clicker1Anim, clicker2Anim, clicker3Anim]
+
+        # Initialize constants
+        self.noise = 100
+        self.dt = 0.05
+        self.screen_w, self.screen_h = pyautogui.size()
+        self.clicker_radius = clicker1Anim.autoclicker.radius
+        self.max_x, self.max_y = self.screen_w - self.clicker_radius, self.screen_h - self.clicker_radius
+        self.min_x, self.min_y = self.clicker_radius, 450
+        self.initial_x = []
+        self.initial_y = []
+        self.curr_x = []
+        self.curr_y = []
+        self.curr_ax = []
+        self.curr_ay = []
+
         self.threadactive = False
 
 
     def run(self):
-        self.threadactive = True
-        # self.move_ants()
-        self.move_circular()
+        try:
+            self.threadactive = True
+            self.move_ants()
+
+        except Exception as e:
+            print(e)
+            exit(4)
 
     def move_ants(self):
-        def update_x(curr_x, a_x):
-            new_x = curr_x + 0.5 * a_x * (dt ** 2)
-            if new_x > max_x:
-                new_x = max_x
-            elif new_x < min_x:
-                new_x = min_x
+        def in_bounds_x(curr_x, a_x):
+            new_x = curr_x + 0.5 * a_x * (self.dt ** 2)
+            if new_x > self.max_x:
+                new_x = self.max_x
+            elif new_x < self.min_x:
+                new_x = self.min_x
             return new_x
 
-        def update_y(curr_y, a_y):
-            new_y = curr_y + 0.5 * a_y * (dt ** 2)
-            if new_y > max_y:
-                new_y = max_y
-            elif new_y < min_y:
-                new_y = min_y
+        def in_bounds_y(curr_y, a_y):
+            new_y = curr_y + 0.5 * a_y * (self.dt ** 2)
+            if new_y > self.max_y:
+                new_y = self.max_y
+            elif new_y < self.min_y:
+                new_y = self.min_y
             return new_y
 
-        # clicker animation constants
-        noise = 100
-        dt = 0.05
-        screen_w, screen_h = pyautogui.size()
-        max_x, max_y = screen_w - 180, screen_h - 150
-        min_x, min_y = 10, 450
+        def sense_collision(new_x, new_y, i):
+            collided = False
+            for j in range(len(self.clickers)):
+                if i != j:
+                    if (new_x - self.curr_x[j])**2 + ((new_y - self.curr_y[j])**2) <= self.clicker_radius ** 2:
+                        collided = True
+            return collided
 
-        geo1 = self.clicker1.geometry()  # QRect
-        x1_0, y1_0 = geo1.x(), geo1.y()
-
-        geo2 = self.clicker2.geometry()
-        x2_0, y2_0 = geo2.x(), geo2.y()
-
-        geo3 = self.clicker3.geometry()
-        x3_0, y3_0 = geo3.x(), geo3.y()
-
-        x1, y1, x2, y2, x3, y3 = x1_0, y1_0, x2_0, y2_0, x3_0, y3_0
-        a1_x, a1_y, a2_x, a2_y, a3_x, a3_y = 0, 0, 0, 0, 0, 0
-        while self.win.running:
-            if not self.win.paused:
-                # #animations
-                if noise == 0:
-                    rand = [0, 0, 0, 0, 0, 0]
-                else:
-                    rand = np.random.randint(-noise, noise, 6)
-
-                a1_x += rand[0]
-                a1_y += rand[1]
-                a2_x += rand[2]
-                a2_y += rand[3]
-                a3_x += rand[4]
-                a3_y += rand[5]
-
-                x1 = update_x(x1, a1_x)
-                y1 = update_y(y1, a1_y)
-                x2 = update_x(x2, a2_x)
-                y2 = update_y(y2, a2_y)
-                x3 = update_x(x3, a3_x)
-                y3 = update_y(y3, a3_y)
-
-                self.clicker_pos.emit(int(x1), int(y1), 0)  # index 0
-                self.clicker_pos.emit(int(x2), int(y2), 1)  # index 1
-                self.clicker_pos.emit(int(x3), int(y3), 2)  # index 2
-
-            time.sleep(dt)
-
-    def move_circular(self):
-        # clicker animation constants
-        r = 90
-        angle = np.radians(90)
-        omega = 0.3
-        noise = 1
-        dt = 0.05
-
-        geo1 = self.clicker1.geometry()  # QRect
-        ac1_x, ac1_y = geo1.x(), geo1.y()
-        center_of_rot_1 = (ac1_x - r, ac1_y)  # Center of Rotation
-
-        geo2 = self.clicker2.geometry()
-        ac2_x, ac2_y = geo2.x(), geo2.y()
-        center_of_rot_2 = (ac2_x - r, ac2_y)  # Center of Rotation
-
-        geo3 = self.clicker3.geometry()
-        ac3_x, ac3_y = geo3.x(), geo3.y()
-        center_of_rot_3 = (ac3_x - r, ac3_y)  # Center of Rotation
+        for ac in self.clickers:
+            geo = ac.geometry()
+            x0, y0 = geo.x(), geo.y()
+            self.initial_x.append(x0)
+            self.initial_y.append(y0)
+            self.curr_x.append(x0)
+            self.curr_y.append(y0)
+            self.curr_ax.append(0)
+            self.curr_ay.append(0)
 
         while self.win.running:
             if not self.win.paused:
-                # #animations
-                if noise == 0:
-                    rand = [0, 0, 0, 0, 0, 0]
-                else:
-                    rand = np.random.randint(-noise, noise, 6)
+                for i, ac in enumerate(self.clickers):
 
-                x1 = center_of_rot_1[0] + (r + rand[0]) * np.cos(angle)
-                y1 = center_of_rot_1[1] - (r + rand[1]) * np.sin(angle)
-                x2 = center_of_rot_2[0] + (r + rand[2]) * np.cos(angle)
-                y2 = center_of_rot_2[1] - (r + rand[3]) * np.sin(angle)
-                x3 = center_of_rot_3[0] + (r + rand[4]) * np.cos(angle)
-                y3 = center_of_rot_3[1] - (r + rand[5]) * np.sin(angle)
-                #
-                angle = (angle + omega * dt) % 360
-                self.clicker_pos.emit(int(x1), int(y1), 0)  # index 0
-                self.clicker_pos.emit(int(x2), int(y2), 1)  # index 1
-                self.clicker_pos.emit(int(x3), int(y3), 2)  # index 2
+                    if self.noise == 0:
+                        rand = [0, 0]
+                    else:
+                        rand = np.random.randint(-self.noise, self.noise, 2)
 
-            time.sleep(dt)
+                    new_ax = self.curr_ax[i] + rand[0]
+                    new_ay = self.curr_ay[i] + rand[1]
+
+                    new_x = in_bounds_x(self.curr_x[i], new_ax)
+                    new_y = in_bounds_y(self.curr_y[i], new_ay)
+                    collided = sense_collision(new_x, new_y, i)
+
+                    if not collided:
+                        self.curr_ax[i] = new_ax
+                        self.curr_ay[i] = new_ay
+
+                        self.curr_x[i] = new_x
+                        self.curr_y[i] = new_y
+                        # x, y = int(self.curr_x[i]), int(self.curr_y[i])
+                        self.clicker_pos.emit(new_x, new_y, i)
+                    else:
+                        self.curr_ax[i] = 0
+                        self.curr_ay[i] = 0
+
+                time.sleep(self.dt)
+
 
     def stop(self):
         self.threadactive = False
@@ -215,12 +213,8 @@ class ProgressBarThread(QThread):
 
         self.threadactive = False
 
-    def __del__(self):
-        self.wait()
-
     def run(self):
         self.threadactive = True
-
         while self.win.running:
             if self.music.get_pos() == -1:
                 # song finished running
@@ -232,6 +226,7 @@ class ProgressBarThread(QThread):
             self.progress.emit(int(progress_percentage))
 
             time.sleep(self.dt)
+
 
     def stop(self):
         self.threadactive = False

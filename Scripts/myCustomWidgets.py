@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QPushButton, QApplication, QHBoxLayout, QInputDialog, QLineEdit
-from PyQt5.QtGui import QColor, QRegion, QPainter, QBrush
+from PyQt5.QtGui import QColor, QRegion, QPainter, QBrush, QPen
 from PyQt5.QtCore import Qt, QRect
 import time
 import numpy as np
@@ -19,7 +19,10 @@ class AutoClicker(QWidget):
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         self.isClicked = False
         self.leds_active = False
+        self.firstRun = True
         self.score = 0
+        self.region = None
+        self.radius = 100
 
     def sizeHint(self):
         return QtCore.QSize(60, 120)
@@ -40,18 +43,13 @@ class AutoClicker(QWidget):
         self.update()
 
     def paintEvent(self, e):
-        width, height = self.parent.frameGeometry().width(), self.parent.frameGeometry().height()
-        region = QRegion(QRect(40, 30, int(width/2), int(height/2)), QRegion.Ellipse)
-        self.setMask(region)
-
         bg_color = self.color
-        brush = QBrush()
-        brush.setStyle(Qt.SolidPattern)
-        brush.setColor(QColor(bg_color))
 
         painter = QPainter(self)
-        rect = QtCore.QRect(0, 0, painter.device().width(), painter.device().height())
-        painter.fillRect(rect, brush)
+        painter.setPen(QPen(Qt.black, 1, Qt.SolidLine))
+        painter.setBrush(QBrush(bg_color, Qt.SolidPattern))
+        # painter.drawEllipse(0, 0, painter.device().width(), painter.device().height())
+        painter.drawEllipse(0, 0, self.radius, self.radius)
 
 
 class AutoClickerAnimation(QWidget):
@@ -91,13 +89,9 @@ class AutoClickerAnimation(QWidget):
         self.blink()
 
     def blink(self):
-        print("now blink!")
         dt = 1/self.blink_speed
         list = range(int(self.blink_time * self.blink_speed))
         for i in list:
-            # if self.resetBit:
-            #     self.resetBit = False
-            #     break
             if not self.autoclicker.leds_active:
                 break
 

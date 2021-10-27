@@ -19,7 +19,7 @@ class Screen:
     lbl_height = 140
     lbl_margin_y = 35
     lbl_text_color = rgb_to_hex((255, 255, 255))
-    lbl_bg_color = "(0, 0, 0, 0.2)"
+    lbl_bg_color = "(0, 0, 0, 0.25)"
     lbl_text_font = QFont('MV Boli', 70, QFont.Bold) # pristina, ravie
 
     # song choice label style
