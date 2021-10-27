@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import Qt
-from webcolors import rgb_to_hex
 
 ASSET_PATH = r'Assets/'
 
@@ -14,22 +13,21 @@ class Screen:
     transparent_color = Qt.transparent
 
     # Label style
-    lbl_color = rgb_to_hex((180, 180, 255))
     lbl_width = 1500
     lbl_height = 140
     lbl_margin_y = 35
-    lbl_text_color = rgb_to_hex((255, 255, 255))
-    lbl_bg_color = "(0, 0, 0, 0.25)"
+    lbl_text_color = "(255, 255, 255, 1.0)"
+    lbl_bg_color = "(0, 0, 0, 0.2)"
     lbl_text_font = QFont('MV Boli', 70, QFont.Bold) # pristina, ravie
 
     # song choice label style
     song_choice_lbl_width = 310
     song_choice_lbl_text_font = QFont('Times', 20, QFont.Bold)
-    song_choice_lbl_text_color = rgb_to_hex((180, 180, 255))
+    song_choice_lbl_text_color = "(180, 180, 255, 1.0)"
     song_choice_lbl_margin_y = 80
 
     # score screen label style
-    score_text_color = rgb_to_hex((102, 204, 102))
+    score_text_color = "(102, 204, 102, 1.0)"
 
     # Button style
     btn_color = "(100, 100, 255, 0.8)"
@@ -39,13 +37,12 @@ class Screen:
     btn_height = 140
     btn_margin_x = 30
     btn_margin_y = 50
-    btn_text_color = rgb_to_hex((240, 240, 240))
-    # btn_bg_color = rgb_to_hex((100, 100, 255))
+    btn_text_color = "(240, 240, 240, 1.0)"
     btn_bg_color = "(100, 100, 255, 0.9)"
     btn_text_font = QFont('Times', 25, QFont.Bold)
     btn_opacity = 30
 
-    prog_bar_bg_color = rgb_to_hex((150, 120, 180))
+    prog_bar_bg_color = "(150, 120, 180, 1.0)"
     prog_bar_width = 800
     prog_bar_height = 150
     prog_bar_margin_y = 5
@@ -94,7 +91,7 @@ class Screen:
         lbl.setGeometry(pos_x, pos_y, self.lbl_width, self.lbl_height)
         lbl.setStyleSheet(f"background-color: rgba{self.lbl_bg_color};"
                           f"opacity: 255;"  # 0-255
-                          f"color: {self.lbl_text_color};"
+                          f"color: rgba{self.lbl_text_color};"
                           "text-align: center;"
                           "opacity: 255;"  # 0-255
                           "padding: 3px;"
@@ -107,7 +104,7 @@ class Screen:
 
         lbl.setGeometry(pos_x, pos_y, self.song_choice_lbl_width, self.lbl_height)
         lbl.setStyleSheet(f"background-color: {self.transparent_color}; "
-                          f"color: {self.song_choice_lbl_text_color};"
+                          f"color: rgba{self.song_choice_lbl_text_color};"
                           "border: 0px;"
                           "text-align: center;"
                           "opacity: 255;"  # 0-255
@@ -124,7 +121,7 @@ class Screen:
         btn.setFont(self.btn_text_font)
         btn.setGeometry(pos_x, pos_y, self.btn_width, self.btn_height)
         btn.setStyleSheet(f"background-color: rgba{self.btn_bg_color}; "
-                          f"color: {self.btn_text_color};"
+                          f"color: rgba{self.btn_text_color};"
                           "border-radius: 10;"
                           "border: 1px solid black;"
                           "text-align: center;"
@@ -148,7 +145,7 @@ class Screen:
         bar.setAlignment(Qt.AlignCenter)
         bar.setFont(self.btn_text_font)
         # bar.setFont(QFont('Arial', 20))
-        bar.setStyleSheet(f"background-color: {self.prog_bar_bg_color};"
+        bar.setStyleSheet(f"background-color: rgba{self.prog_bar_bg_color};"
                           f"border: 1px solid red;"
                           f"border-radius: 10;")
 
@@ -337,7 +334,7 @@ class ScoreScreen(Screen):
         # Labels
         label_good_job = QLabel(self.win)
         self.stylize_lbl(label_good_job, int((self.win.width - self.lbl_width) / 2), 130, "כל הכבוד!")
-        label_good_job.setStyleSheet(f"color: {Screen.score_text_color};"
+        label_good_job.setStyleSheet(f"color: rgba{Screen.score_text_color};"
 )
         self.labels.append(label_good_job)
 

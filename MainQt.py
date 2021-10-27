@@ -9,11 +9,11 @@ from PyQt5.QtGui import QIcon
 import pyautogui
 import pygame.mixer
 from mutagen.mp3 import MP3
+import numpy as np
 from Scripts.myCustomWidgets import AutoClickerAnimation, ChangeUserList
 from Scripts.database import PlayerDataBase
 from Scripts.threads import ProgressBarThread, ACMoveThread, ACBlinkThread, ResetGuiThread
 from Scripts.screens import MainScreen, InstructionsScreen, SecondScreen, GameScreen, ScoreScreen
-import numpy as np
 
 # region init
 # load assets and songs
