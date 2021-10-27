@@ -110,7 +110,7 @@ class ACMoveThread(QThread):
         self.dt = 0.05
         self.screen_w, self.screen_h = pyautogui.size()
         self.clicker_radius = clicker1Anim.autoclicker.radius
-        self.max_x, self.max_y = self.screen_w - self.clicker_radius, self.screen_h - self.clicker_radius
+        self.max_x, self.max_y = self.screen_w - 1.1*self.clicker_radius, self.screen_h - 1.1*self.clicker_radius
         self.min_x, self.min_y = self.clicker_radius, 450
         self.initial_x = []
         self.initial_y = []
