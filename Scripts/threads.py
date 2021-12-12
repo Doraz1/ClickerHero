@@ -110,10 +110,9 @@ class ACMoveThread(QThread):
         self.dt = 0.05
         self.screen_w, self.screen_h = pyautogui.size()
         self.clicker_radius = clicker1Anim.autoclicker.radius
-        self.max_x, self.max_y = self.screen_w - 1.1*self.clicker_radius, self.screen_h - 1.1*self.clicker_radius
-        self.min_x, self.min_y = self.clicker_radius, 450
-        self.initial_x = []
-        self.initial_y = []
+        self.min_y, self.max_y = 510, self.screen_h
+        self.min_x, self.max_x = self.clicker_radius, self.screen_w
+        self.min_x, self.max_x = self.clicker_radius, 1300
         self.curr_x = []
         self.curr_y = []
         self.curr_ax = []
@@ -132,35 +131,49 @@ class ACMoveThread(QThread):
             exit(4)
 
     def move_ants(self):
-        def in_bounds_x(curr_x, a_x):
+        def in_bounds_x(a_x):
+            touched_wall = False
+            curr_x = self.curr_x[i]
             new_x = curr_x + 0.5 * a_x * (self.dt ** 2)
             if new_x > self.max_x:
                 new_x = self.max_x
+                touched_wall = True
             elif new_x < self.min_x:
                 new_x = self.min_x
-            return new_x
+                touched_wall = True
 
-        def in_bounds_y(curr_y, a_y):
+            return new_x, touched_wall
+
+        def in_bounds_y(a_y):
+            touched_wall = False
+            curr_y = self.curr_y[i]
             new_y = curr_y + 0.5 * a_y * (self.dt ** 2)
             if new_y > self.max_y:
                 new_y = self.max_y
+                touched_wall = True
             elif new_y < self.min_y:
                 new_y = self.min_y
-            return new_y
+                touched_wall = True
+            return new_y, touched_wall
 
-        def sense_collision(new_x, new_y, i):
-            collided = False
+        def sense_collision(ax, ay, i):
+            # check if clicker hit the walls
+            new_x, collided_wall_x = in_bounds_x(ax)
+            new_y, collided_wall_y = in_bounds_y(ay)
+
+            collided_clicker = False
+            print(f"moving Clicker {i} which is in x={new_x}")
             for j in range(len(self.clickers)):
                 if i != j:
-                    if (new_x - self.curr_x[j])**2 + ((new_y - self.curr_y[j])**2) <= self.clicker_radius ** 2:
-                        collided = True
-            return collided
+                    # print(f"checking collision with {self.curr_x[j]}")
+                    if ((new_x - self.curr_x[j])**2) + ((new_y - self.curr_y[j])**2) <= (self.clicker_radius ** 2):
+                        collided_clicker = True
+                        print(f"clicker {i} collided when moving into {j}")
+            return new_x, new_y, collided_wall_x, collided_wall_y, collided_clicker
 
         for ac in self.clickers:
             geo = ac.geometry()
             x0, y0 = geo.x(), geo.y()
-            self.initial_x.append(x0)
-            self.initial_y.append(y0)
             self.curr_x.append(x0)
             self.curr_y.append(y0)
             self.curr_ax.append(0)
@@ -169,30 +182,34 @@ class ACMoveThread(QThread):
         while self.win.running:
             if not self.win.paused:
                 for i, ac in enumerate(self.clickers):
-
-                    if self.noise == 0:
-                        rand = [0, 0]
-                    else:
-                        rand = np.random.randint(-self.noise, self.noise, 2)
+                    rand = np.random.randint(-self.noise, self.noise, 2)
+                    rand = [30, 20]
 
                     new_ax = self.curr_ax[i] + rand[0]
                     new_ay = self.curr_ay[i] + rand[1]
 
-                    new_x = in_bounds_x(self.curr_x[i], new_ax)
-                    new_y = in_bounds_y(self.curr_y[i], new_ay)
-                    collided = sense_collision(new_x, new_y, i)
+                    new_x, new_y, col_x, col_y, col_clicker = sense_collision(new_ax, new_ay, i)
 
-                    if not collided:
-                        self.curr_ax[i] = new_ax
-                        self.curr_ay[i] = new_ay
-
-                        self.curr_x[i] = new_x
-                        self.curr_y[i] = new_y
-                        # x, y = int(self.curr_x[i]), int(self.curr_y[i])
-                        self.clicker_pos.emit(new_x, new_y, i)
+                    if col_x:
+                        new_ax = 0
+                    if col_y:
+                        new_ay = 0
+                    if col_clicker:
+                        new_ax = 0
+                        new_ay = 0
                     else:
-                        self.curr_ax[i] = 0
-                        self.curr_ay[i] = 0
+                        'No collision'
+                        self.curr_ax[i] = new_ax
+                        self.curr_x[i] = new_x
+                        self.curr_ay[i] = new_ay
+                        self.curr_y[i] = new_y
+
+                    self.clicker_pos.emit(self.curr_x[i], self.curr_y[i], i)
+
+
+                print(f"dx12={np.abs(self.curr_x[0]-self.curr_x[1])}")
+                print(f"dx23={np.abs(self.curr_x[1]-self.curr_x[2])}")
+                print(f"dx13={np.abs(self.curr_x[2]-self.curr_x[0])}")
 
                 time.sleep(self.dt)
 
@@ -231,3 +248,101 @@ class ProgressBarThread(QThread):
     def stop(self):
         self.threadactive = False
         self.quit()
+
+#region ROS2
+
+import rclpy
+from rclpy.node import Node
+from threading import Thread
+from  tf2_msgs.msg import TFMessage
+import math
+
+class MinimalSubscriber(Node):
+
+    def __init__(self):
+        super().__init__('minimal_subscriber')
+        self.subscription = self.create_subscription(TFMessage,'tf',self.listener_callback, 10)
+        self.msg = 15
+        self.x = 0
+        self.y = 0
+        self.theta = 0
+        # self.subscription  # prevent unused variable warning
+
+    def listener_callback(self, msg):
+        header = msg.transforms[0].header
+        translations = msg.transforms[0].transform.translation # x, y, z 3D vector
+        rotations = msg.transforms[0].transform.rotation # x, y, z, w quaternion
+
+        x = round(translations.x, 4) * 100 # cm
+        y = round(translations.y, 4) * 100 # cm
+        theta = round(math.degrees(3*rotations.z), 1)
+
+        # print(f"\nRobot is currently at ({x}, {y}) with an angle of {theta}")
+
+        self.x = x
+        self.y = y
+        self.theta = theta
+
+        # rotationX = msg.transforms.transform.rotation.x
+        # tf2_msgs.msg.TFMessage(
+        #     transforms=[geometry_msgs.msg.TransformStamped(
+        #         header=std_msgs.msg.Header(
+        #             stamp=builtin_interfaces.msg.Time(
+        #                 sec=1639263839,
+        #                 nanosec=522887424),
+        #                 frame_id='odom_frame'),
+        #         child_frame_id='camera_pose_frame',
+        #         transform=geometry_msgs.msg.Transform(
+        #             translation=geometry_msgs.msg.Vector3(
+        #                 x=-3.236397969885729e-05,
+        #                 y=3.9944672607816756e-05,
+        #                 z=-0.00021711552108172327),
+        #             rotation=geometry_msgs.msg.Quaternion(
+        #                 x=0.004904894158244133,
+        #                 y=-0.7111507654190063,
+        #                 z=-0.004923465196043253,
+        #                 w=0.7030051946640015)))])
+
+
+
+class Ros2QTSubscriber(QThread):
+    dt = 0.2  # sec
+    # num = QtCore.pyqtSignal(int, int, int)
+    camera_msg = QtCore.pyqtSignal(float, float, float)
+
+    def __init__(self, win):
+        QThread.__init__(self)
+        self.threadactive = False
+        self.win = win
+
+        rclpy.init()
+        self.minimal_subscriber = MinimalSubscriber()
+
+    def run_ros_listener(self):
+        rclpy.spin(self.minimal_subscriber)
+
+        # Destroy the node explicitly
+        # (optional - otherwise it will be done automatically
+        # when the garbage collector destroys the node object)
+        self.minimal_subscriber.destroy_node()
+        rclpy.shutdown()
+
+    def run(self):
+       # in a different thread
+        listener_thread = Thread(target=self.run_ros_listener)
+        listener_thread.start() # starts the infinite loop. since we don't call thread.join() we don't wait for execute
+
+        self.threadactive = True
+
+        while self.win.running and self.threadactive:
+            x = self.minimal_subscriber.x
+            y = self.minimal_subscriber.y
+            theta = self.minimal_subscriber.theta
+            self.camera_msg.emit(x, y, theta)
+            time.sleep(self.dt)
+
+
+    def stop(self):
+        self.threadactive = False
+        self.quit()
+#endregion

@@ -282,7 +282,8 @@ class GameScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = os.path.join(ASSET_PATH, "bg_game.jpg")
+        bg_image_path = ASSET_PATH + "BG_game.jpg"
+        print(bg_image_path)
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)

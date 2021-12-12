@@ -12,9 +12,8 @@ from mutagen.mp3 import MP3
 import numpy as np
 from Scripts.myCustomWidgets import AutoClickerAnimation, ChangeUserList
 from Scripts.database import PlayerDataBase
-from Scripts.threads import ProgressBarThread, ACMoveThread, ACBlinkThread, ResetGuiThread
+from Scripts.threads import ProgressBarThread, ACMoveThread, ACBlinkThread, Ros2QTSubscriber, ResetGuiThread
 from Scripts.screens import MainScreen, InstructionsScreen, SecondScreen, GameScreen, ScoreScreen
-
 # region init
 # load assets and songs
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +26,7 @@ class MyWindow(QMainWindow):
     def __init__(self, width, height, title):
         super().__init__()
         full_screen_size = pyautogui.size()
+        self.simulatorActive = False # simulate camera locations vs. use true locations
         self.width = width
         self.height = height
         self.setGeometry(int((full_screen_size[0] - width)/2), int((full_screen_size[1] - height)/2), width, height)
@@ -178,24 +178,39 @@ class MyWindow(QMainWindow):
                 self.progressBarThread = ProgressBarThread(self, pygame.mixer.music)
                 self.progressBarThread.progress.connect(self.updateProgressBar)
 
-                auto_clicker1 = AutoClickerAnimation(0)
-                auto_clicker2 = AutoClickerAnimation(1)
-                auto_clicker3 = AutoClickerAnimation(2)
-                self.screens["game"].autoClickerAnimations = []
-                self.screens["game"].autoClickerAnimations.append(auto_clicker1)
-                self.screens["game"].autoClickerAnimations.append(auto_clicker2)
-                self.screens["game"].autoClickerAnimations.append(auto_clicker3)
-
-                self.clickerMoveThread = ACMoveThread(self)
-                self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
-
-                self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
-                self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
-                self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
-
                 self.resetGuiThread = ResetGuiThread(self)
 
-            move_clickers_to_initial_positions(self)
+                if self.simulatorActive:
+                    # simulate locations and visuals
+                    auto_clicker1 = AutoClickerAnimation(0)
+                    auto_clicker2 = AutoClickerAnimation(1)
+                    auto_clicker3 = AutoClickerAnimation(2)
+
+                    self.screens["game"].autoClickerAnimations = []
+                    self.screens["game"].autoClickerAnimations.append(auto_clicker1)
+                    self.screens["game"].autoClickerAnimations.append(auto_clicker2)
+                    self.screens["game"].autoClickerAnimations.append(auto_clicker3)
+
+                    self.clickerMoveThread = ACMoveThread(self)
+                    self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
+
+                    self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
+                    self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
+                    self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
+
+                    move_clickers_to_initial_positions(self)
+
+                else:
+                    # use real camera locations
+                    self.rosSubscriberThread = Ros2QTSubscriber(self)
+                    self.printThisTime = 0
+                    self.rosSubscriberThread.camera_msg.connect(self.printNum)
+                    msg = "Please place the AutoClickers in their initial positions."
+                    button_reply = QMessageBox.question(self, 'PyQt5 message', msg,
+                                                        QMessageBox.Close | QMessageBox.Cancel, QMessageBox.Cancel)
+
+                    if button_reply != QMessageBox.Close:
+                        return
 
             self.activate_screen("game")
 
@@ -206,13 +221,21 @@ class MyWindow(QMainWindow):
             pygame.mixer.music.play()
 
             self.progressBarThread.start()
-            self.clickerMoveThread.start()
-            self.clickerBlinkThread1.start()
-            self.clickerBlinkThread2.start()
-            self.clickerBlinkThread3.start()
+            if self.simulatorActive:
+                self.clickerMoveThread.start()
+                self.clickerBlinkThread1.start()
+                self.clickerBlinkThread2.start()
+                self.clickerBlinkThread3.start()
+                self.rosSubscriberThread.start()
+
         except Exception as e:
             print(e)
             exit(-2)
+    def printNum(self, x, y, theta):
+        # self.printThisTime += 1
+        # if self.printThisTime % 10 == 0:
+        #     print(f"Robot coordinates received! ({x}, {y}) with angle {theta}")
+        print(f"Robot coordinates received! ({x}, {y}) with angle {theta}")
 
     # region thread events
     def updateProgressBar(self, progress):
@@ -239,10 +262,15 @@ class MyWindow(QMainWindow):
 
     def killAllThreads(self):
         self.progressBarThread.stop()
-        self.clickerMoveThread.stop()
-        self.clickerBlinkThread1.stop()
-        self.clickerBlinkThread2.stop()
-        self.clickerBlinkThread3.stop()
+
+        if self.simulatorActive:
+            self.clickerMoveThread.stop()
+            self.clickerBlinkThread1.stop()
+            self.clickerBlinkThread2.stop()
+            self.clickerBlinkThread3.stop()
+        else:
+            self.rosSubscriberThread.stop()
+
     #endregion
 
 

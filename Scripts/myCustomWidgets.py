@@ -122,14 +122,16 @@ class ChangeUserList(QWidget):
         self.database = database
         self.listWidget = QtWidgets.QListWidget()
         self.layout = QHBoxLayout()
+        self.width = 200
+        self.height = 300
 
         self.createList()
 
     def createList(self):
         # create layout
         self.listWidget.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-        self.listWidget.setGeometry(QtCore.QRect(10, 10, 211, 291))
-
+        self.listWidget.setGeometry(QtCore.QRect(int((self.win.width - self.width) / 2), int((self.win.height - self.height)/2), self.width, self.height))
+        self.move(int((self.win.width - self.width) / 2), int((self.win.height - self.height)/2))
         # fetch player names and populate list
         rows = self.database.load_all()
         for player in rows:
