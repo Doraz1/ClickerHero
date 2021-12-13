@@ -1,5 +1,7 @@
 import os
 import sys
+
+import rclpy
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -169,8 +171,6 @@ class MyWindow(QMainWindow):
                 win.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
                 win.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
 
-
-
             if self.first_run:
                 # Create the threads and the autoclickers for the first time
                 # self.first_run = False
@@ -199,18 +199,17 @@ class MyWindow(QMainWindow):
                     self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
 
                     move_clickers_to_initial_positions(self)
-
                 else:
                     # use real camera locations
                     self.rosSubscriberThread = Ros2QTSubscriber(self)
                     self.printThisTime = 0
                     self.rosSubscriberThread.camera_msg.connect(self.printNum)
                     msg = "Please place the AutoClickers in their initial positions."
-                    button_reply = QMessageBox.question(self, 'PyQt5 message', msg,
-                                                        QMessageBox.Close | QMessageBox.Cancel, QMessageBox.Cancel)
-
-                    if button_reply != QMessageBox.Close:
-                        return
+                    # button_reply = QMessageBox.question(self, 'PyQt5 message', msg,
+                    #                                     QMessageBox.Close | QMessageBox.Cancel, QMessageBox.Cancel)
+                    #
+                    # if button_reply != QMessageBox.Close:
+                    #     return
 
             self.activate_screen("game")
 
@@ -226,7 +225,9 @@ class MyWindow(QMainWindow):
                 self.clickerBlinkThread1.start()
                 self.clickerBlinkThread2.start()
                 self.clickerBlinkThread3.start()
+            else:
                 self.rosSubscriberThread.start()
+
 
         except Exception as e:
             print(e)

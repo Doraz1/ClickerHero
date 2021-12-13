@@ -256,16 +256,18 @@ from rclpy.node import Node
 from threading import Thread
 from  tf2_msgs.msg import TFMessage
 import math
+import rospy2
 
 class MinimalSubscriber(Node):
-
     def __init__(self):
         super().__init__('minimal_subscriber')
-        self.subscription = self.create_subscription(TFMessage,'tf',self.listener_callback, 10)
+        self.freq = 10
+        self.subscription = self.create_subscription(TFMessage,'tf',self.listener_callback, self.freq)
         self.msg = 15
         self.x = 0
         self.y = 0
         self.theta = 0
+        print("entered")
         # self.subscription  # prevent unused variable warning
 
     def listener_callback(self, msg):
@@ -277,7 +279,7 @@ class MinimalSubscriber(Node):
         y = round(translations.y, 4) * 100 # cm
         theta = round(math.degrees(3*rotations.z), 1)
 
-        # print(f"\nRobot is currently at ({x}, {y}) with an angle of {theta}")
+        print(f"\nRobot is currently at ({x}, {y}) with an angle of {theta}")
 
         self.x = x
         self.y = y
@@ -307,32 +309,29 @@ class MinimalSubscriber(Node):
 
 class Ros2QTSubscriber(QThread):
     dt = 0.2  # sec
-    # num = QtCore.pyqtSignal(int, int, int)
     camera_msg = QtCore.pyqtSignal(float, float, float)
 
     def __init__(self, win):
         QThread.__init__(self)
         self.threadactive = False
         self.win = win
-
-        rclpy.init()
+        # rclpy.init()
         self.minimal_subscriber = MinimalSubscriber()
 
     def run_ros_listener(self):
-        rclpy.spin(self.minimal_subscriber)
+        dt = 1 / self.minimal_subscriber.freq
+        while self.threadactive:
+            rclpy.spin_once(self.minimal_subscriber)
+            time.sleep(dt)  # 10Hz
 
-        # Destroy the node explicitly
-        # (optional - otherwise it will be done automatically
-        # when the garbage collector destroys the node object)
         self.minimal_subscriber.destroy_node()
-        rclpy.shutdown()
 
     def run(self):
        # in a different thread
+        self.threadactive = True
         listener_thread = Thread(target=self.run_ros_listener)
         listener_thread.start() # starts the infinite loop. since we don't call thread.join() we don't wait for execute
 
-        self.threadactive = True
 
         while self.win.running and self.threadactive:
             x = self.minimal_subscriber.x
