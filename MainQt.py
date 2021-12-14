@@ -180,30 +180,31 @@ class MyWindow(QMainWindow):
 
                 self.resetGuiThread = ResetGuiThread(self)
 
+                # Create AutoClickerAnimation, a circle that changes color and blinks
+                self.screens["game"].autoClickerAnimations = []
+                self.screens["game"].autoClickerAnimations.append(AutoClickerAnimation(0))
+                self.screens["game"].autoClickerAnimations.append(AutoClickerAnimation(1))
+                self.screens["game"].autoClickerAnimations.append(AutoClickerAnimation(2))
+
+                # A thread that checks collisions and emits the final coordinates based on its movement engine
+                self.clickerMoveThread = ACMoveThread(self)
+                self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
+
+                self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
+                self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
+                self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
+
                 if self.simulatorActive:
-                    # simulate locations and visuals
-                    auto_clicker1 = AutoClickerAnimation(0)
-                    auto_clicker2 = AutoClickerAnimation(1)
-                    auto_clicker3 = AutoClickerAnimation(2)
 
-                    self.screens["game"].autoClickerAnimations = []
-                    self.screens["game"].autoClickerAnimations.append(auto_clicker1)
-                    self.screens["game"].autoClickerAnimations.append(auto_clicker2)
-                    self.screens["game"].autoClickerAnimations.append(auto_clicker3)
-
-                    self.clickerMoveThread = ACMoveThread(self)
-                    self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
-
-                    self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
-                    self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
-                    self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
 
                     move_clickers_to_initial_positions(self)
                 else:
                     # use real camera locations
                     self.rosSubscriberThread = Ros2QTSubscriber(self)
                     self.printThisTime = 0
-                    self.rosSubscriberThread.camera_msg.connect(self.printNum)
+                    self.rosSubscriberThread.camera_msg.connect(self.clickerMoveThread.move_based_on_inputs)
+                    # message from subscriber activates self.printNum
+                    # self.rosSubscriberThread.camera_msg.connect(self.printNum)
                     msg = "Please place the AutoClickers in their initial positions."
                     # button_reply = QMessageBox.question(self, 'PyQt5 message', msg,
                     #                                     QMessageBox.Close | QMessageBox.Cancel, QMessageBox.Cancel)
@@ -220,11 +221,12 @@ class MyWindow(QMainWindow):
             pygame.mixer.music.play()
 
             self.progressBarThread.start()
+            self.clickerBlinkThread1.start()
+            self.clickerBlinkThread2.start()
+            self.clickerBlinkThread3.start()
+
             if self.simulatorActive:
                 self.clickerMoveThread.start()
-                self.clickerBlinkThread1.start()
-                self.clickerBlinkThread2.start()
-                self.clickerBlinkThread3.start()
             else:
                 self.rosSubscriberThread.start()
 
@@ -263,12 +265,12 @@ class MyWindow(QMainWindow):
 
     def killAllThreads(self):
         self.progressBarThread.stop()
+        self.clickerBlinkThread1.stop()
+        self.clickerBlinkThread2.stop()
+        self.clickerBlinkThread3.stop()
 
         if self.simulatorActive:
             self.clickerMoveThread.stop()
-            self.clickerBlinkThread1.stop()
-            self.clickerBlinkThread2.stop()
-            self.clickerBlinkThread3.stop()
         else:
             self.rosSubscriberThread.stop()
 

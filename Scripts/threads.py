@@ -124,13 +124,16 @@ class ACMoveThread(QThread):
     def run(self):
         try:
             self.threadactive = True
-            self.move_ants()
+            if self.win.simulatorActive:
+                self.move_ants_simulator()
+            else:
+                self.move_based_on_inputs()
 
         except Exception as e:
             print(e)
             exit(4)
 
-    def move_ants(self):
+    def move_ants_simulator(self):
         def in_bounds_x(a_x):
             touched_wall = False
             curr_x = self.curr_x[i]
@@ -213,6 +216,14 @@ class ACMoveThread(QThread):
 
                 time.sleep(self.dt)
 
+    def move_based_on_inputs(self, x, y, theta):
+        center_screen_bias_x = 900
+        center_screen_bias_y = 750
+        MEF = 6 # make camera movements larger
+        ac_social_dist = self.clicker_radius
+        self.clicker_pos.emit(center_screen_bias_y + MEF*y + ac_social_dist, center_screen_bias_x + MEF*x, 0)
+        self.clicker_pos.emit(center_screen_bias_y + MEF*y, center_screen_bias_x + MEF*x, 1)
+        self.clicker_pos.emit(center_screen_bias_y + MEF*y - ac_social_dist, center_screen_bias_x + MEF*x, 2)
 
     def stop(self):
         self.threadactive = False
@@ -277,9 +288,9 @@ class MinimalSubscriber(Node):
 
         x = round(translations.x, 4) * 100 # cm
         y = round(translations.y, 4) * 100 # cm
-        theta = round(math.degrees(3*rotations.z), 1)
+        theta = round(rotations.z, 4)
 
-        print(f"\nRobot is currently at ({x}, {y}) with an angle of {theta}")
+        # print(f"\nRobot is currently at ({x}, {y}) with an angle of {theta}")
 
         self.x = x
         self.y = y
