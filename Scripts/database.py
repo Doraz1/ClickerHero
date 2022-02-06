@@ -77,7 +77,7 @@ class PlayerDataBase():
                WHERE first_name = '{first_name}' AND last_name = '{last_name}'"""
 
         song_score = self.execute_query(query, return_rows=True)[0][0]
-        if song_score <= new_score:
+        if song_score < new_score:
             query = f"""Update {self.topic}
                             set {song_name}_score = {new_score}
                             where first_name = '{first_name}' and last_name = '{last_name}'"""

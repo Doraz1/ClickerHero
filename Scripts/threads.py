@@ -1,21 +1,22 @@
+import threading
+
 from PyQt5 import QtCore
 from PyQt5.QtCore import QThread
 import time
 import numpy as np
 import pyautogui
-from PyQt5.QtGui import QRegion
 
 class ClickerBlinkThread(QThread):
-    def __init__(self, win, clicker):
+    def __init__(self, win, clickerAnimation):
         QThread.__init__(self)
         self.win = win
-        self.clicker = clicker
+        self.clickerAnimation = clickerAnimation
         self.threadactive = False
 
     def run(self):
         try:
             self.threadactive = True
-            self.clicker.activateLEDs()
+            self.clickerAnimation.activateLEDs()
             self.stop()
         except Exception as e:
             print(e)
@@ -38,7 +39,7 @@ class ResetGuiThread(QThread):
             print("entered gui reset thread")
             self.threadactive = True
             self.win.killAllThreads()
-            for clicker in self.win.screens["game"].autoClickerAnimations:
+            for clicker in self.win.screens["game"].autoClickers:
                 clicker.resetBlink()
 
             self.stop()
@@ -52,23 +53,46 @@ class ResetGuiThread(QThread):
         self.quit()
 
 
-class ACBlinkThread(QThread):
-    easierLevel = 8
+class ACBlinkThreads:
+    '''
+    LED command simulator.
+    Sends activation commands to all Clickers based on notes
+    '''
+    easyUpLevel = 8
 
-    def __init__(self, win, clicker_number, bpm, notes):
+    def __init__(self, win, notes, rosPubThread):
+        self.win = win
+        self.thread1 = ACBlinkThread(self.win, 0, notes[0], rosPubThread)
+        self.thread2 = ACBlinkThread(self.win, 1, notes[1], rosPubThread)
+        self.thread3 = ACBlinkThread(self.win, 2, notes[2], rosPubThread)
+
+    def start(self):
+        self.thread1.start()
+        self.thread2.start()
+        self.thread3.start()
+
+    def stop(self):
+        self.thread1.stop()
+        self.thread2.stop()
+        self.thread3.stop()
+
+class ACBlinkThread(QThread):
+    LED_msg = QtCore.pyqtSignal(int)
+
+    def __init__(self, win, ind, notes, rosPubThread):
         QThread.__init__(self)
         self.win = win
-        self.clicker = win.screens['game'].autoClickerAnimations[clicker_number - 1]
-        self.bpm = bpm
+        self.ind = ind
+        self.clicker = win.screens['game'].autoClickers[ind]
+        self.bpm = self.win.bpm
         self.notes = notes
         self.blinkThread = ClickerBlinkThread(win, self.clicker)
-
         self.threadactive = False
+        self.rosPubThread = rosPubThread
 
     def run(self):
         try:
             self.threadactive = True
-
             start_time = time.time()
             iteration = 1
             note_ind = 0
@@ -81,7 +105,32 @@ class ACBlinkThread(QThread):
                     prev_note = next_note
                     note_ind += 1
                     next_note = self.notes[note_ind]
-                    self.blinkThread.start()
+                    if self.win.simActive:
+                        self.blinkThread.start()
+                    else:
+                        cmds = np.zeros(3)
+                        num = self.rosPubThread.currCmd # this is a binary 3-bit number 111|000|101]
+                        i=0
+                        while num != 0:
+                            num, rem = divmod(num, 10)
+                            cmds[i] = rem
+                            i = i+1
+                        cmds[self.ind] = 1
+                        updated_cmd = cmds[2] + cmds[1]*10 + cmds[0]*100
+                        self.LED_msg.emit(updated_cmd)
+                else:
+                    cmds = np.zeros(3)
+                    num = self.rosPubThread.currCmd  # this is a binary 3-bit number 111|000|101]
+                    i = 0
+                    while num != 0:
+                        num, rem = divmod(num, 10)
+                        cmds[i] = rem
+                        i = i + 1
+                    cmds[self.ind] = 0
+                    updated_cmd = cmds[2] + cmds[1] * 10 + cmds[0] * 100
+                    # print(f"emitting 0 from {self.ind}")
+                    self.LED_msg.emit(updated_cmd)
+
                 iteration += 1
         except Exception as e:
             print(e)
@@ -92,15 +141,21 @@ class ACBlinkThread(QThread):
         self.threadactive = False
         self.quit()
 
-class ACMoveThread(QThread):
+class ACMoveThreads(QThread):
+    '''
+    Movement simulator engine.
+    Visually moves clicker animations.
+    Checks collisions and emits the final coordinates.
+    '''
+
     clicker_pos = QtCore.pyqtSignal(int, int, int)
 
     def __init__(self, win):
         QThread.__init__(self)
         self.win = win
-        clicker1Anim = win.screens['game'].autoClickerAnimations[0]
-        clicker2Anim = win.screens['game'].autoClickerAnimations[1]
-        clicker3Anim = win.screens['game'].autoClickerAnimations[2]
+        clicker1Anim = win.screens['game'].autoClickers[0]
+        clicker2Anim = win.screens['game'].autoClickers[1]
+        clicker3Anim = win.screens['game'].autoClickers[2]
 
         self.win = win
         self.clickers = [clicker1Anim, clicker2Anim, clicker3Anim]
@@ -109,7 +164,7 @@ class ACMoveThread(QThread):
         self.noise = 100
         self.dt = 0.05
         self.screen_w, self.screen_h = pyautogui.size()
-        self.clicker_radius = clicker1Anim.autoclicker.radius
+        self.clicker_radius = clicker1Anim.helper.radius
         self.min_y, self.max_y = 510, self.screen_h
         self.min_x, self.max_x = self.clicker_radius, self.screen_w
         self.min_x, self.max_x = self.clicker_radius, 1300
@@ -120,11 +175,26 @@ class ACMoveThread(QThread):
 
         self.threadactive = False
 
+    @staticmethod
+    def move_clickers_to_initial_positions(win):
+
+        click_offset_x = 200
+        click_offset_y = 200
+
+        ac1_x, ac1_y = int(win.width / 2), int(win.height / 2)
+        ac2_x, ac2_y = int(win.width / 2) - click_offset_x, int(win.height / 2) + click_offset_y
+        ac3_x, ac3_y = int(win.width / 2) + click_offset_x, int(win.height / 2) + click_offset_y
+        win.screens["game"].autoClickers[0].move(ac1_x, ac1_y)
+        win.screens["game"].autoClickers[1].move(ac2_x, ac2_y)
+        win.screens["game"].autoClickers[2].move(ac3_x, ac3_y)
+
+    def moveAutoClickers(self, x, y, index):
+        self.clickers[index].move(x, y)
 
     def run(self):
         try:
             self.threadactive = True
-            if self.win.simulatorActive:
+            if self.win.simActive:
                 self.move_ants_simulator()
             else:
                 self.move_based_on_inputs()
@@ -165,13 +235,13 @@ class ACMoveThread(QThread):
             new_y, collided_wall_y = in_bounds_y(ay)
 
             collided_clicker = False
-            print(f"moving Clicker {i} which is in x={new_x}")
+            # print(f"moving Clicker {i} which is in x={new_x}")
             for j in range(len(self.clickers)):
                 if i != j:
                     # print(f"checking collision with {self.curr_x[j]}")
                     if ((new_x - self.curr_x[j])**2) + ((new_y - self.curr_y[j])**2) <= (self.clicker_radius ** 2):
                         collided_clicker = True
-                        print(f"clicker {i} collided when moving into {j}")
+                        # print(f"clicker {i} collided when moving into {j}")
             return new_x, new_y, collided_wall_x, collided_wall_y, collided_clicker
 
         for ac in self.clickers:
@@ -210,9 +280,9 @@ class ACMoveThread(QThread):
                     self.clicker_pos.emit(self.curr_x[i], self.curr_y[i], i)
 
 
-                print(f"dx12={np.abs(self.curr_x[0]-self.curr_x[1])}")
-                print(f"dx23={np.abs(self.curr_x[1]-self.curr_x[2])}")
-                print(f"dx13={np.abs(self.curr_x[2]-self.curr_x[0])}")
+                # print(f"dx12={np.abs(self.curr_x[0]-self.curr_x[1])}")
+                # print(f"dx23={np.abs(self.curr_x[1]-self.curr_x[2])}")
+                # print(f"dx13={np.abs(self.curr_x[2]-self.curr_x[0])}")
 
                 time.sleep(self.dt)
 
@@ -246,7 +316,7 @@ class ProgressBarThread(QThread):
         while self.win.running:
             if self.music.get_pos() == -1:
                 # song finished running
-                self.btn_stop_game()
+                self.win.btn_stop_game()
                 return
 
             curr_progress = self.music.get_pos() / 1000  # in seconds
@@ -265,20 +335,20 @@ class ProgressBarThread(QThread):
 import rclpy
 from rclpy.node import Node
 from threading import Thread
+from std_msgs.msg import Int16
+from geometry_msgs.msg import Twist
 from  tf2_msgs.msg import TFMessage
-import math
-import rospy2
 
-class MinimalSubscriber(Node):
+
+class LocationSubscriberNode(Node):
     def __init__(self):
-        super().__init__('minimal_subscriber')
+        super().__init__('TF_subscriber')
         self.freq = 10
         self.subscription = self.create_subscription(TFMessage,'tf',self.listener_callback, self.freq)
         self.msg = 15
         self.x = 0
         self.y = 0
         self.theta = 0
-        print("entered")
         # self.subscription  # prevent unused variable warning
 
     def listener_callback(self, msg):
@@ -317,7 +387,6 @@ class MinimalSubscriber(Node):
         #                 w=0.7030051946640015)))])
 
 
-
 class Ros2QTSubscriber(QThread):
     dt = 0.2  # sec
     camera_msg = QtCore.pyqtSignal(float, float, float)
@@ -326,8 +395,7 @@ class Ros2QTSubscriber(QThread):
         QThread.__init__(self)
         self.threadactive = False
         self.win = win
-        # rclpy.init()
-        self.minimal_subscriber = MinimalSubscriber()
+        self.minimal_subscriber = LocationSubscriberNode()
 
     def run_ros_listener(self):
         dt = 1 / self.minimal_subscriber.freq
@@ -340,8 +408,8 @@ class Ros2QTSubscriber(QThread):
     def run(self):
        # in a different thread
         self.threadactive = True
-        listener_thread = Thread(target=self.run_ros_listener)
-        listener_thread.start() # starts the infinite loop. since we don't call thread.join() we don't wait for execute
+        tf_listener_thread = Thread(target=self.run_ros_listener)
+        tf_listener_thread.start() # starts the infinite loop. since we don't call thread.join() we don't wait for execute
 
 
         while self.win.running and self.threadactive:
@@ -355,4 +423,85 @@ class Ros2QTSubscriber(QThread):
     def stop(self):
         self.threadactive = False
         self.quit()
+
+
+class LEDMasterNode(Node):
+    def __init__(self):
+        super().__init__("LEDMasterNode")
+        self.LED_cmd_publisher_ = self.create_publisher(Int16, "LED_cmd", 10)
+
+    def publish_command(self, cmd):
+        msg = Int16()
+        msg.data = cmd
+        self.LED_cmd_publisher_.publish(msg)
+
+
+class QT2RosLEDPublisher(QThread):
+    '''
+    publish LED commands
+    '''
+
+    dt = 0.2  # sec
+    LED_msg = QtCore.pyqtSignal(Int16)
+
+    def __init__(self):
+        QThread.__init__(self)
+        self.LED_cmd_publisher = LEDMasterNode()
+        self.currCmd = 0
+
+    def run_led_publisher(self, cmd):
+        self.LED_cmd_publisher.publish_command(cmd)
+        self.currCmd = cmd
+
+    def stop(self):
+        self.threadactive = False
+        self.quit()
+
+
+
+class QT2RosNavPublisher(QThread):
+    '''
+    publish navigation commands
+    '''
+
+    nav_msg = QtCore.pyqtSignal(float, float, float, float, float, float)
+
+    def __init__(self):
+        QThread.__init__(self)
+        self.Nav_cmd_publisher = NavMasterNode()
+        # self.currCmd = 0
+
+    def run_nav_publisher(self, x, y, z, rx, ry, rz):
+        print("entered")
+        self.Nav_cmd_publisher.publish_command(x, 0.0, 0.0, 0.0, 0.0, rz)
+        # self.currCmd = cmd
+
+    def stop(self):
+        self.threadactive = False
+        self.Nav_cmd_publisher.stop()
+        self.quit()
+
+
+class NavMasterNode(Node):
+    def __init__(self):
+        super().__init__("LEDMasterNode")
+        self.Nav_cmd_publisher_ = self.create_publisher(Twist, "cmd_vel", 10)
+        self.possible_cmds_x = [0.0, -0.05, 0.0, 0.0, 0.0, -0.05, 0.0, 0.0]
+        self.possible_cmds_rz = [0.0, 0.0, 0.0, -0.8, 0.0, 0.0, 0.0, 0.8]
+        self.ind = 0
+        self.threadactive = True
+        self.publishingThread = Thread(target=self.publish_command)
+        self.publishingThread.start()  # starts the infinite loop. since we don't call thread.join() we don't wait for execute
+
+    def publish_command(self):
+        while self.threadactive:
+            msg = Twist()
+            msg.linear.x = self.possible_cmds_x[self.ind]
+            msg.angular.z = self.possible_cmds_rz[self.ind]
+            self.ind = (self.ind + 1) % len(self.possible_cmds_x)
+            self.Nav_cmd_publisher_.publish(msg)
+            time.sleep(4.0)
+
+    def stop(self):
+        self.threadactive = False
 #endregion

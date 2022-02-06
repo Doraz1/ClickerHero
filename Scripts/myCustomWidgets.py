@@ -7,20 +7,101 @@ import numpy as np
 
 
 class AutoClicker(QWidget):
+    '''
+    Robot class with movement and LED simulators as well as real-time engines
+    '''
+    def __init__(self, parent, ind):
+        super().__init__(parent)
+        self.parent = parent
+        self.ind = ind
+        self.sim_active = self.parent.simActive
+        self.animation = AutoClickerAnimation(self, self.ind)
+        self.score = 0
+
+    def move(self, x, y):
+        self.animation.move(x, y)
+
+    def resetBlink(self):
+        self.animation.resetBlink()
+
+
+class AutoClickerAnimation(QWidget):
+    blink_speed = 16
+    on_time = 2  # sec
+    blink_time = 1  # sec
+
+    def __init__(self, parent, ind):
+        super(AutoClickerAnimation, self).__init__()
+        self.ind = ind
+        self.parent = parent
+
+        self.helper = AutoClickerAnimationHelper(self)
+        layout = QVBoxLayout()
+        layout.addWidget(self.helper)
+        self.setLayout(layout)
+
+        self.resetBit = False
+
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+
+        self.numBlinkLevels = 8
+        self.blinkState = self.numBlinkLevels - 1
+        minLevel, maxLevel = 30, 255
+        step = ((maxLevel - minLevel) / (self.numBlinkLevels - 1)) - 1
+        self.alphaLevels = np.arange(30, 255, int(step), dtype=np.int32)
+
+    def activateLEDs(self):
+        self.helper.leds_active = True
+
+        self.blinkState = self.numBlinkLevels - 1
+        color = self.helper.onColor
+        color.setAlpha(self.alphaLevels[self.blinkState])
+        self.helper.setColor(color)
+        time.sleep(self.on_time - self.blink_time)
+        self.blink()
+
+    def blink(self):
+        dt = 1/self.blink_speed
+        list = range(int(self.blink_time * self.blink_speed))
+        for i in list:
+            if not self.helper.leds_active:
+                break
+
+            time.sleep(dt)
+
+            self.blinkState = (self.blinkState - 1) % self.numBlinkLevels
+
+            color = self.helper.onColor
+            color.setAlpha(self.alphaLevels[self.blinkState])
+
+            if not self.resetBit and self.helper.leds_active:
+                self.helper.setColor(color)
+
+        self.resetBlink()
+
+    def resetBlink(self):
+        # self.resetBit = True
+        self.helper.setColor(self.helper.offColor)
+        self.helper.leds_active = False
+        self.ind = 0
+        self.blinkState = self.numBlinkLevels - 1
+
+
+class AutoClickerAnimationHelper(QWidget):
     # transparentColor = QColor(50, 50, 50, 30)
     onColor = QColor(255, 0, 0, 255)
     offColor = QColor(42, 13, 0, 255)
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.color = self.offColor
         self.parent = parent
+        self.color = self.offColor
 
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         self.isClicked = False
         self.leds_active = False
         self.firstRun = True
-        self.score = 0
         self.region = None
         self.radius = 100
 
@@ -36,7 +117,7 @@ class AutoClicker(QWidget):
         if self.leds_active:
             self.setColor(self.offColor)
             self.leds_active = False
-            self.score += 1
+            self.parent.parent.score += 1 # AutoClicker score
 
     def setColor(self, color):
         self.color = color
@@ -51,68 +132,6 @@ class AutoClicker(QWidget):
         # painter.drawEllipse(0, 0, painter.device().width(), painter.device().height())
         painter.drawEllipse(0, 0, self.radius, self.radius)
 
-
-class AutoClickerAnimation(QWidget):
-    blink_speed = 16
-    on_time = 2  # sec
-    blink_time = 1  # sec
-
-    def __init__(self, ind):
-        super(AutoClickerAnimation, self).__init__()
-
-        self.autoclicker = AutoClicker(self)
-        layout = QVBoxLayout()
-        layout.addWidget(self.autoclicker)
-        self.setLayout(layout)
-
-        self.ind = ind
-
-        self.resetBit = False
-
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-
-        self.numBlinkLevels = 8
-        self.blinkState = self.numBlinkLevels - 1
-        minLevel, maxLevel = 30, 255
-        step = ((maxLevel - minLevel) / (self.numBlinkLevels - 1)) - 1
-        self.alphaLevels = np.arange(30, 255, int(step), dtype=np.int32)
-
-    def activateLEDs(self):
-        self.autoclicker.leds_active = True
-
-        self.blinkState = self.numBlinkLevels - 1
-        color = self.autoclicker.onColor
-        color.setAlpha(self.alphaLevels[self.blinkState])
-        self.autoclicker.setColor(color)
-        time.sleep(self.on_time - self.blink_time)
-        self.blink()
-
-    def blink(self):
-        dt = 1/self.blink_speed
-        list = range(int(self.blink_time * self.blink_speed))
-        for i in list:
-            if not self.autoclicker.leds_active:
-                break
-
-            time.sleep(dt)
-
-            self.blinkState = (self.blinkState - 1) % self.numBlinkLevels
-
-            color = self.autoclicker.onColor
-            color.setAlpha(self.alphaLevels[self.blinkState])
-
-            if not self.resetBit and self.autoclicker.leds_active:
-                self.autoclicker.setColor(color)
-
-        self.resetBlink()
-
-    def resetBlink(self):
-        # self.resetBit = True
-        self.autoclicker.setColor(self.autoclicker.offColor)
-        self.autoclicker.leds_active = False
-        self.ind = 0
-        self.blinkState = self.numBlinkLevels - 1
 
 
 class ChangeUserList(QWidget):

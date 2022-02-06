@@ -12,9 +12,11 @@ import pyautogui
 import pygame.mixer
 from mutagen.mp3 import MP3
 import numpy as np
-from Scripts.myCustomWidgets import AutoClickerAnimation, ChangeUserList
+from Scripts.myCustomWidgets import AutoClicker, ChangeUserList, AutoClickerAnimation
 from Scripts.database import PlayerDataBase
-from Scripts.threads import ProgressBarThread, ACMoveThread, ACBlinkThread, Ros2QTSubscriber, ResetGuiThread
+from Scripts.threads import ProgressBarThread, ACBlinkThreads, ResetGuiThread, ACMoveThreads
+
+from Scripts.threads import Ros2QTSubscriber, QT2RosLEDPublisher, QT2RosNavPublisher, NavMasterNode
 from Scripts.screens import MainScreen, InstructionsScreen, SecondScreen, GameScreen, ScoreScreen
 # region init
 # load assets and songs
@@ -28,7 +30,8 @@ class MyWindow(QMainWindow):
     def __init__(self, width, height, title):
         super().__init__()
         full_screen_size = pyautogui.size()
-        self.simulatorActive = False # simulate camera locations vs. use true locations
+        self.simActive = False # simulate camera locations vs. use true locations
+        # self.simActive = True
         self.width = width
         self.height = height
         self.setGeometry(int((full_screen_size[0] - width)/2), int((full_screen_size[1] - height)/2), width, height)
@@ -60,7 +63,7 @@ class MyWindow(QMainWindow):
         self.song_name = ""
         self.audio = None
         self.total_song_length = -1
-        self.beats_per_min = -1
+        self.bpm = -1
         self.song_path = ""
 
         # game parameters
@@ -101,8 +104,6 @@ class MyWindow(QMainWindow):
     def btn_instructions(self):
         self.activate_screen("instructions")
 
-
-
     def btn_exit(self):
         button_reply = QMessageBox.question(self, 'PyQt5 message', "Exit the application?",
                                             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -130,7 +131,7 @@ class MyWindow(QMainWindow):
 
         self.song_path = os.path.join(SONGS_PATH, "One Kiss_cropped.mp3")
         self.audio = MP3(self.song_path)
-        self.beats_per_min = 123.85  # using audacity we got 123, updated a bit
+        self.bpm = 123.85  # using audacity we got 123, updated a bit
 
 
         notes = self.get_autoclicker_notes('one kiss')
@@ -138,7 +139,7 @@ class MyWindow(QMainWindow):
     # endregion
 
     def get_autoclicker_notes(self, song_name):
-        beats_per_sec = self.beats_per_min / 60  # 2
+        beats_per_sec = self.bpm / 60  # 2
         dt = 1 / beats_per_sec  # every this many seconds
         self.total_song_length = self.audio.info.length
         self.note_times = np.arange(0, self.total_song_length, dt)  # 1.9sec, 3.8sec, etc.
@@ -149,10 +150,10 @@ class MyWindow(QMainWindow):
         if song_name == 'one kiss':
             # iterations to play on, assuming each iteration is the shortest beat
             # up to 430 iterations
-            easyUp = ACBlinkThread.easierLevel
+            easyUp = ACBlinkThreads.easyUpLevel
             ac1_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]  # notes only till song end
-            ac2_notes = [easyUp * iter + 2 for iter in iters if iter<(iters[-1]//easyUp) + 1]
-            ac3_notes = [easyUp * iter + 4 for iter in iters if iter<(iters[-1]//easyUp) + 1]
+            ac2_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]
+            ac3_notes = [easyUp * iter for iter in iters if iter<(iters[-1]//easyUp) + 1]
             notes.append(ac1_notes)
             notes.append(ac2_notes)
             notes.append(ac3_notes)
@@ -160,51 +161,47 @@ class MyWindow(QMainWindow):
 
     def begin_game(self, notes):
         try:
-            def move_clickers_to_initial_positions(win):
-                click_offset_x = 200
-                click_offset_y = 200
-
-                ac1_x, ac1_y = int(self.width / 2), int(self.height / 2)
-                ac2_x, ac2_y = int(self.width / 2) - click_offset_x, int(self.height / 2) + click_offset_y
-                ac3_x, ac3_y = int(self.width / 2) + click_offset_x, int(self.height / 2) + click_offset_y
-                win.screens["game"].autoClickerAnimations[0].move(ac1_x, ac1_y)
-                win.screens["game"].autoClickerAnimations[1].move(ac2_x, ac2_y)
-                win.screens["game"].autoClickerAnimations[2].move(ac3_x, ac3_y)
-
             if self.first_run:
-                # Create the threads and the autoclickers for the first time
+                '''
+                Create the threads and the autoclickers for the first time
+                '''
                 # self.first_run = False
-
                 self.progressBarThread = ProgressBarThread(self, pygame.mixer.music)
                 self.progressBarThread.progress.connect(self.updateProgressBar)
 
-                self.resetGuiThread = ResetGuiThread(self)
+                # Create AutoClickers and their animations (the animations MUST belong to the win for some reason)
+                self.screens["game"].autoClickers = []
+                self.screens["game"].autoClickers.append(AutoClicker(self, 0).animation)
+                self.screens["game"].autoClickers.append(AutoClicker(self, 1).animation)
+                self.screens["game"].autoClickers.append(AutoClicker(self, 2).animation)
 
-                # Create AutoClickerAnimation, a circle that changes color and blinks
-                self.screens["game"].autoClickerAnimations = []
-                self.screens["game"].autoClickerAnimations.append(AutoClickerAnimation(0))
-                self.screens["game"].autoClickerAnimations.append(AutoClickerAnimation(1))
-                self.screens["game"].autoClickerAnimations.append(AutoClickerAnimation(2))
+                # Create AutoClicker simulators
+                self.clickerMoveThread = ACMoveThreads(self)
+                self.clickerMoveThread.clicker_pos.connect(self.clickerMoveThread.moveAutoClickers)
 
-                # A thread that checks collisions and emits the final coordinates based on its movement engine
-                self.clickerMoveThread = ACMoveThread(self)
-                self.clickerMoveThread.clicker_pos.connect(self.moveAutoClickers)
-
-                self.clickerBlinkThread1 = ACBlinkThread(self, 1, self.beats_per_min, notes[0])
-                self.clickerBlinkThread2 = ACBlinkThread(self, 2, self.beats_per_min, notes[1])
-                self.clickerBlinkThread3 = ACBlinkThread(self, 3, self.beats_per_min, notes[2])
-
-                if self.simulatorActive:
-
-
-                    move_clickers_to_initial_positions(self)
+                if self.simActive:
+                    print("Simulators are active!")
+                    self.clickerBlinkThread = ACBlinkThreads(self, notes)
+                    self.clickerMoveThread.move_clickers_to_initial_positions(self)
                 else:
-                    # use real camera locations
+                    # use real camera locations and LED commands
+                    print("Real life data!")
+                    rclpy.init()
+                    'Clicker 1 location subscriber'
                     self.rosSubscriberThread = Ros2QTSubscriber(self)
-                    self.printThisTime = 0
                     self.rosSubscriberThread.camera_msg.connect(self.clickerMoveThread.move_based_on_inputs)
-                    # message from subscriber activates self.printNum
-                    # self.rosSubscriberThread.camera_msg.connect(self.printNum)
+
+                    'LED publisher'
+                    self.rosLEDPublisherThread = QT2RosLEDPublisher()
+                    self.clickerBlinkThread = ACBlinkThreads(self, notes, self.rosLEDPublisherThread)
+                    self.clickerBlinkThread.thread1.LED_msg.connect(self.rosLEDPublisherThread.run_led_publisher)
+                    # self.clickerBlinkThread.thread2.LED_msg.connect(self.rosPublisherThread.run_led_publisher)
+                    # self.clickerBlinkThread.thread3.LED_msg.connect(self.rosPublisherThread.run_led_publisher)
+
+                    'Navigation publisher'
+                    self.rosNavPublisherThread = QT2RosNavPublisher()
+                    # self.clickerBlinkThread.thread1.LED_msg.connect(self.rosLEDPublisherThread.run_nav_publisher)
+
                     msg = "Please place the AutoClickers in their initial positions."
                     # button_reply = QMessageBox.question(self, 'PyQt5 message', msg,
                     #                                     QMessageBox.Close | QMessageBox.Cancel, QMessageBox.Cancel)
@@ -212,20 +209,19 @@ class MyWindow(QMainWindow):
                     # if button_reply != QMessageBox.Close:
                     #     return
 
+                self.resetGuiThread = ResetGuiThread(self)
+
             self.activate_screen("game")
 
             self.running = True
 
-            pygame.mixer.init()  # init pygame mixer
-            pygame.mixer.music.load(self.song_path)  # charge la musique
+            pygame.mixer.init()
+            pygame.mixer.music.load(self.song_path)
             pygame.mixer.music.play()
 
             self.progressBarThread.start()
-            self.clickerBlinkThread1.start()
-            self.clickerBlinkThread2.start()
-            self.clickerBlinkThread3.start()
-
-            if self.simulatorActive:
+            self.clickerBlinkThread.start()
+            if self.simActive:
                 self.clickerMoveThread.start()
             else:
                 self.rosSubscriberThread.start()
@@ -245,34 +241,46 @@ class MyWindow(QMainWindow):
         self.screens['game'].progressBars[0].setValue(progress)
 
         self.score = 0
-        for clickerAnimation in self.screens["game"].autoClickerAnimations:
-            clicker = clickerAnimation.autoclicker
-            self.score += 15 * clicker.score
+        for clickerAnim in self.screens["game"].autoClickers:
+            self.score += 15 * clickerAnim.parent.score
 
         self.screens['game'].show()
 
-    def moveAutoClickers(self, x, y, index):
-        self.screens['game'].autoClickerAnimations[index].move(x, y)
+    # def moveAutoClickers(self, x, y, index):
+    #     self.screens['game'].autoClickers[index].move(x, y)
 
     def resetGui(self):
         self.running = False
         self.score = 0
 
         self.killAllThreads()
-        for clicker in self.screens["game"].autoClickerAnimations:
-            clicker.resetBlink()
-            clicker.score = 0
+        for clickerAnim in self.screens["game"].autoClickers:
+            clickerAnim.resetBlink()
+            clickerAnim.parent.score = 0
 
     def killAllThreads(self):
         self.progressBarThread.stop()
-        self.clickerBlinkThread1.stop()
-        self.clickerBlinkThread2.stop()
-        self.clickerBlinkThread3.stop()
-
-        if self.simulatorActive:
-            self.clickerMoveThread.stop()
+        self.clickerBlinkThread.stop()
+        self.clickerMoveThread.stop()
+        self.clickerBlinkThread.stop()
+        if self.simActive:
+            pass
         else:
             self.rosSubscriberThread.stop()
+            self.rosLEDPublisherThread.stop()
+            self.rosNavPublisherThread.stop()
+            rclpy.shutdown()
+
+
+
+
+
+
+
+
+
+
+
 
     #endregion
 

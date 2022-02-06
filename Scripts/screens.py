@@ -53,7 +53,7 @@ class Screen:
         self.labels = []
         self.scoreButtonLabels = []
         self.buttons = []
-        self.autoClickerAnimations = []
+        self.autoClickers = []
         self.progressBars = []
 
     def show(self):
@@ -65,7 +65,7 @@ class Screen:
             btn.show()
         for bar in self.progressBars:
             bar.show()
-        for clicker in self.autoClickerAnimations:
+        for clicker in self.autoClickers:
             clicker.show()
 
     def hide(self):
@@ -75,7 +75,7 @@ class Screen:
             btn.hide()
         for bar in self.progressBars:
             bar.hide()
-        for clicker in self.autoClickerAnimations:
+        for clicker in self.autoClickers:
             clicker.hide()
 
     def create_background(self, label, image_path):
