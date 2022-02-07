@@ -5,7 +5,6 @@ from PyQt5.QtCore import Qt, QRect
 import time
 import numpy as np
 
-
 class AutoClicker(QWidget):
     '''
     Robot class with movement and LED simulators as well as real-time engines

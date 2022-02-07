@@ -1,10 +1,10 @@
 import threading
-
 from PyQt5 import QtCore
 from PyQt5.QtCore import QThread
 import time
 import numpy as np
 import pyautogui
+
 
 class ClickerBlinkThread(QThread):
     def __init__(self, win, clickerAnimation):

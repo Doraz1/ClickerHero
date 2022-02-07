@@ -15,7 +15,6 @@ import numpy as np
 from Scripts.myCustomWidgets import AutoClicker, ChangeUserList, AutoClickerAnimation
 from Scripts.database import PlayerDataBase
 from Scripts.threads import ProgressBarThread, ACBlinkThreads, ResetGuiThread, ACMoveThreads
-
 from Scripts.threads import Ros2QTSubscriber, QT2RosLEDPublisher, QT2RosNavPublisher, NavMasterNode
 from Scripts.screens import MainScreen, InstructionsScreen, SecondScreen, GameScreen, ScoreScreen
 # region init

@@ -1,6 +1,5 @@
 import sqlite3 as sql
 
-
 class PlayerDataBase():
     topic = 'players'
     database_name = f'{topic}DB.db'

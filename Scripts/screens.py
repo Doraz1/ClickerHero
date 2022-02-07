@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt
 
 ASSET_PATH = r'Assets/'
 
+
 class Screen:
     transparent_color = Qt.transparent
 
