@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import Qt
-
 ASSET_PATH = r'Assets/'
 
 
@@ -54,7 +53,8 @@ class Screen:
         self.labels = []
         self.scoreButtonLabels = []
         self.buttons = []
-        self.autoClickers = []
+        self.autoclickers = []
+        self.autoClickerAnims = []
         self.progressBars = []
 
     def show(self):
@@ -66,8 +66,8 @@ class Screen:
             btn.show()
         for bar in self.progressBars:
             bar.show()
-        for clicker in self.autoClickers:
-            clicker.show()
+        for clicker in self.autoclickers:
+            clicker.animation.show()
 
     def hide(self):
         for lbl in self.labels:
@@ -76,8 +76,8 @@ class Screen:
             btn.hide()
         for bar in self.progressBars:
             bar.hide()
-        for clicker in self.autoClickers:
-            clicker.hide()
+        for clicker in self.autoclickers:
+            clicker.animation.hide()
 
     def create_background(self, label, image_path):
         pix = QPixmap(image_path)

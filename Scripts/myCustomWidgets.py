@@ -1,27 +1,77 @@
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QPushButton, QApplication, QHBoxLayout, QInputDialog, QLineEdit
-from PyQt5.QtGui import QColor, QRegion, QPainter, QBrush, QPen
-from PyQt5.QtCore import Qt, QRect
 import time
 import numpy as np
+import PyQt5
+from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QPushButton, QHBoxLayout, QInputDialog, QLineEdit,\
+    QListWidget, QListWidgetItem
+from PyQt5.QtGui import QColor, QPainter, QBrush, QPen
+from PyQt5.QtCore import Qt
+from Scripts.threads import ACBlinkThread, ACMoveThread
+from Scripts.threads import Ros2QTSubscriber, QT2RosLEDPublisher, QT2RosNavPublisher
 
 class AutoClicker(QWidget):
     '''
     Robot class with movement and LED simulators as well as real-time engines
     '''
-    def __init__(self, parent, ind):
-        super().__init__(parent)
-        self.parent = parent
+    def __init__(self, win, ind):
+        super().__init__(win)
+        self.win = win
         self.ind = ind
-        self.sim_active = self.parent.simActive
         self.animation = AutoClickerAnimation(self, self.ind)
         self.score = 0
+        self.x = 0
+        self.y = 0
+        'Movement thread - only for on-screen animations'
+        self.MoveThread = ACMoveThread(self.win, self, self.ind) # both for sim and real
+        self.MoveThread.clicker_pos.connect(self.move)
 
-    def move(self, x, y):
+        'LED thread'
+        self.clickerBlinkThread = ACBlinkThread(self.win, self, self.ind)
+
+        if not self.win.simActive:
+            'Location subscriber'
+            self.rosSubscriberThread = Ros2QTSubscriber(self.win)
+            self.rosSubscriberThread.camera_msg.connect(self.MoveThread.move_based_on_real_inputs)
+
+            'Navigation publisher'
+            self.rosNavPublisherThread = QT2RosNavPublisher(self.ind)
+        else:
+            pass
+
+    def move(self, x, y, index):
+        self.x = x
+        self.y = y
+
+        if self.win.DEBUG:
+            print(f"Moving clicker to new coords: {x, y}")
+
         self.animation.move(x, y)
 
-    def resetBlink(self):
-        self.animation.resetBlink()
+    def reset_blink(self):
+        self.animation.reset_blink()
+
+    def start_threads(self):
+        print("Starting threads")
+        self.clickerBlinkThread.start()
+        self.MoveThread.start()
+
+        if not self.win.simActive:
+            self.rosNavPublisherThread.start()
+            self.rosSubscriberThread.start()
+        else:
+            pass
+
+    def reset(self):
+        self.score = 0
+
+        # reset threads
+        self.reset_blink()
+        self.MoveThread.stop()
+        if not self.win.simActive:
+            self.rosLEDPublisherThread.stop()
+            self.rosNavPublisherThread.stop()
+            self.rosSubscriberThread.stop()
+        else:
+            self.clickerBlinkThread.stop()
 
 
 class AutoClickerAnimation(QWidget):
@@ -30,11 +80,14 @@ class AutoClickerAnimation(QWidget):
     blink_time = 1  # sec
 
     def __init__(self, parent, ind):
+        """
+        Activates the blinking animation of AutoClicker simulators on the right timing.
+        """
         super(AutoClickerAnimation, self).__init__()
         self.ind = ind
         self.parent = parent
 
-        self.helper = AutoClickerAnimationHelper(self)
+        self.helper = ACAnimMouseHandler(self)
         layout = QVBoxLayout()
         layout.addWidget(self.helper)
         self.setLayout(layout)
@@ -57,6 +110,7 @@ class AutoClickerAnimation(QWidget):
         color = self.helper.onColor
         color.setAlpha(self.alphaLevels[self.blinkState])
         self.helper.setColor(color)
+
         time.sleep(self.on_time - self.blink_time)
         self.blink()
 
@@ -66,7 +120,6 @@ class AutoClickerAnimation(QWidget):
         for i in list:
             if not self.helper.leds_active:
                 break
-
             time.sleep(dt)
 
             self.blinkState = (self.blinkState - 1) % self.numBlinkLevels
@@ -77,9 +130,9 @@ class AutoClickerAnimation(QWidget):
             if not self.resetBit and self.helper.leds_active:
                 self.helper.setColor(color)
 
-        self.resetBlink()
+        self.reset_blink()
 
-    def resetBlink(self):
+    def reset_blink(self):
         # self.resetBit = True
         self.helper.setColor(self.helper.offColor)
         self.helper.leds_active = False
@@ -87,12 +140,16 @@ class AutoClickerAnimation(QWidget):
         self.blinkState = self.numBlinkLevels - 1
 
 
-class AutoClickerAnimationHelper(QWidget):
+class ACAnimMouseHandler(QWidget):
     # transparentColor = QColor(50, 50, 50, 30)
     onColor = QColor(255, 0, 0, 255)
     offColor = QColor(42, 13, 0, 255)
 
     def __init__(self, parent):
+        """
+        Detects mouse clicks on AutoClicker animation and triggers color changes.
+        :param parent:
+        """
         super().__init__(parent)
         self.parent = parent
         self.color = self.offColor
@@ -105,7 +162,8 @@ class AutoClickerAnimationHelper(QWidget):
         self.radius = 100
 
     def sizeHint(self):
-        return QtCore.QSize(60, 120)
+        return PyQt5.QtCore.QSize(60, 120)
+
 
     def mouseMoveEvent(self, e):
         # click and drag
@@ -128,7 +186,6 @@ class AutoClickerAnimationHelper(QWidget):
         painter = QPainter(self)
         painter.setPen(QPen(Qt.black, 1, Qt.SolidLine))
         painter.setBrush(QBrush(bg_color, Qt.SolidPattern))
-        # painter.drawEllipse(0, 0, painter.device().width(), painter.device().height())
         painter.drawEllipse(0, 0, self.radius, self.radius)
 
 
@@ -138,7 +195,7 @@ class ChangeUserList(QWidget):
         super(ChangeUserList, self).__init__()
         self.win = win
         self.database = database
-        self.listWidget = QtWidgets.QListWidget()
+        self.listWidget = QListWidget()
         self.layout = QHBoxLayout()
         self.width = 200
         self.height = 300
@@ -147,15 +204,15 @@ class ChangeUserList(QWidget):
 
     def createList(self):
         # create layout
-        self.listWidget.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-        self.listWidget.setGeometry(QtCore.QRect(int((self.win.width - self.width) / 2), int((self.win.height - self.height)/2), self.width, self.height))
+        self.listWidget.setSelectionMode(PyQt5.QtWidgets.QAbstractItemView.SingleSelection)
+        self.listWidget.setGeometry(PyQt5.QtCore.QRect(int((self.win.width - self.width) / 2), int((self.win.height - self.height)/2), self.width, self.height))
         self.move(int((self.win.width - self.width) / 2), int((self.win.height - self.height)/2))
         # fetch player names and populate list
         rows = self.database.load_all()
         for player in rows:
             firstName = player[0]
             lastName = player[1]
-            item = QtWidgets.QListWidgetItem(f"{firstName} {lastName}")
+            item = QListWidgetItem(f"{firstName} {lastName}")
             self.listWidget.addItem(item)
 
         # on player choice - load player
