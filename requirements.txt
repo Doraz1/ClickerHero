@@ -1,0 +1,5 @@
+mutagen==1.45.1
+numpy==1.17.4
+pyautogui==0.9.53
+pygame==2.1.2
+PyQt5==5.15.6
