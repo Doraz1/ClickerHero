@@ -27,95 +27,125 @@ class ResetGuiThread(QThread):
         self.quit()
 
 
-# class ACBlinkThreads:
-#
-#
-#     def __init__(self, win, notes, LED_publisher):
-#         self.win = win
-#         self.thread = ACBlinkThread(self.win, 0, notes, LED_publisher)
-#
-#     def start(self):
-#         self.thread.start()
-#
-#     def stop(self):
-#         self.thread.stop()
-
-class ACBlinkThread(QThread):
+class ACNavBlinkThread(QThread):
     '''
         LED command engine (real time and simulation).
         Sends activation commands to Clicker based on notes
     '''
     LED_msg = QtCore.pyqtSignal(int)
-    easyUpLevel = 8
+    nav_msg = QtCore.pyqtSignal(float, float)  # x, rz
 
-    def __init__(self, win, clicker, ind):
+    def __init__(self, win, clicker):
         QThread.__init__(self)
         self.win = win
-        self.ind = ind
         self.clicker = clicker
-        self.bpm = self.win.bpm
-        self.notes = self.win.notes[self.ind]
+        self.ind = self.clicker.ind
+        self.difficulty = self.win.db.get_parameter("difficulty")  # either 1, 2, or 3
+        self.notes = self.win.song_engine.notes[self.ind]
 
         if self.win.DEBUG:
             print("creating blink thread and starting")
 
         if not self.win.simActive:
-            self.LED_publisher = QT2RosLEDPublisher(self.ind) # ROS node
-            self.LED_msg.connect(self.LED_publisher.run_led_publisher)
+            self.ros_publisher = QT2RosPublisher(self.ind) # ROS node
+            self.LED_msg.connect(self.ros_publisher.run_led_publisher)
+
+            self.nav_msg.connect(self.ros_publisher.run_nav_publisher)
         else:
             self.LED_msg.connect(self.start)
+
+            'Move like ants instead. No point in simulating real life commands.'
+            # self.nav_msg.connect(self.LED_publisher.run_nav_publisher)
 
         self.threadactive = False
 
     def run(self):
         try:
+            #region Initialize clicker moves and notes for song
             self.threadactive = True
-            start_time = time.time()
-            iteration = 1
-            note_ind = 0
+            t0 = time.time() - self.win.song_engine.start_from_second
+            self.win.song_t0 = t0
 
+            'create local variables for readability'
+            note_times = self.win.song_engine.note_times
+            notes = self.win.song_engine.notes[self.ind]
+            moves_x, moves_rz = self.win.song_engine.moves[self.ind]
+
+            #endregion
+            'Get first note index'
+            first_note_ind = next(i for i in range(len(note_times)) if note_times[i] > time.time() - t0)
+            # note_times = [note_times[i] - self.win.song_engine.start_from_second for i in range(len(note_times))
+            #               if i >= first_note_ind]
+            notes = [nt for nt in notes if nt > first_note_ind]
+            next_note_ind = notes.pop(0)
+
+            iteration = 1 + first_note_ind
+            print(f"t0: {self.win.song_engine.start_from_second}")
+            print(f"note_times: {note_times[first_note_ind:]}")
+            print(f"iteration: {iteration}")
+            print(f"first_note_ind: {first_note_ind}")
+            print(f"notes: {notes}")
+            print(f"next_note_ind: {next_note_ind}")
             while self.win.running and self.threadactive:
-                time_to_sleep = start_time + self.win.note_times[iteration] - time.time()
+                time_to_sleep = t0 - time.time() + note_times[iteration]
                 time.sleep(time_to_sleep)
-                next_note = self.notes[note_ind]
 
-                if self.win.simActive:
-                    if next_note == iteration:
-                        if self.win.DEBUG:
-                            print("Turning LED on!")
-                        'Time to turn LEDs on'
-                        # prev_note = next_note
-                        note_ind += 1
-                        if self.win.simActive:
+                #region Notes
+                'Play notes'
+                if next_note_ind == iteration:
+                    # print(f"Playing note {next_note} on time {time.time() - t0}")
+                    # if self.win.DEBUG:
+                    if True:
+                        print(f"Turning LED on! dif: {self.difficulty}")
+
+                    if self.win.simActive:
                             activate_LED_thread = Thread(target=self.clicker.animation.activateLEDs)
-                            activate_LED_thread.start()  # starts the infinite loop. since we don't call thread.join() we don't wait for execute
-                else:
-                    currentCmd = self.LED_publisher.currCmd
-                    if next_note == iteration:
-                        if self.win.DEBUG:
-                            print("Turning LED on!")
-                        # prev_note = next_note
-                        note_ind += 1
-                        next_note = self.notes[note_ind]
-                        self.LED_msg.emit(1)
+                            activate_LED_thread.start()  # blink in separate background thread
                     else:
-                        self.LED_msg.emit(0)
+                        # currentCmd = self.LED_publisher.currCmd
+                        self.LED_msg.emit(self.difficulty * 10 + 1)  # emits to LED publisher
+                    if notes is not None:
+                        next_note_ind = notes.pop(0)
+                    else:
+                        next_note_ind = -1 # no more notes
+                else:
+                    if self.win.simActive:
+                        pass
+                    else:
+                        self.LED_msg.emit(self.difficulty * 10 + 0)  # emits to LED publisher
+                #endregion
+
+                #region Movement
+                x_cmd = moves_x[iteration]
+                rz_cmd = moves_rz[iteration]
+
+                if not self.win.DEBUG:
+                    if (x_cmd != 0.0) or (rz_cmd != 0.0):
+                        print(f"Sending commands (x, rz) = {x_cmd, rz_cmd}")
+
+                self.nav_msg.emit(x_cmd, rz_cmd)
+                #endregion
 
                 iteration += 1
+
+            self.nav_msg.emit(0.0, 0.0)
+
         except Exception as e:
             print(e)
             exit(4)
 
-
     def stop(self):
         self.threadactive = False
+        if not self.win.simActive:
+            self.ros_publisher.stop()
         self.quit()
+
 
 class ACMoveThread(QThread):
     '''
     Movement simulator engine.
-    Visually moves clicker animations.
-    Checks collisions and emits the final coordinates.
+    Visually moves clicker animations - based on move engine in simulation and on camera tf coords in real life.
+    Emitted coordinates are handled by the AutoClicker self.move method.
     '''
 
     clicker_pos = QtCore.pyqtSignal(int, int, int)
@@ -123,11 +153,11 @@ class ACMoveThread(QThread):
     initialOffsets = [(0, 0), (-200, 200), (200, 200)]
     noise = 100
 
-    def __init__(self, win, clicker, ind):
+    def __init__(self, win, clicker):
         QThread.__init__(self)
         self.win = win
         self.clicker = clicker
-        self.ind = ind
+        self.ind = self.clicker.ind
 
         # Initialize constants
         self.screen_w, self.screen_h = pyautogui.size()
@@ -213,7 +243,7 @@ class ACMoveThread(QThread):
         while self.win.running:
             if not self.win.paused:
                 rand = np.random.randint(-self.noise, self.noise, 2)
-                rand = [30, 20]
+                # rand = [30, 20]
 
                 new_ax = self.curr_ax + rand[0]
                 new_ay = self.curr_ay + rand[1]
@@ -240,6 +270,11 @@ class ACMoveThread(QThread):
             # print(f"dx23={np.abs(self.curr_x[1]-self.curr_x[2])}")
             # print(f"dx13={np.abs(self.curr_x[2]-self.curr_x[0])}")
 
+    def move_animation(self, x, y):
+        self.curr_x = x
+        self.curr_y = y
+
+        self.clicker_pos.emit(x, y, self.ind)
 
     def move_based_on_real_inputs(self, x, y, theta):
         if not self.win.simActive:
@@ -251,11 +286,7 @@ class ACMoveThread(QThread):
             self.clicker_pos.emit(center_screen_bias_y + MEF*y, center_screen_bias_x + MEF*x, 1)
             self.clicker_pos.emit(center_screen_bias_y + MEF*y - ac_social_dist, center_screen_bias_x + MEF*x, 2)
 
-    def move_animation(self, x, y):
-        self.curr_x = x
-        self.curr_y = y
 
-        self.clicker_pos.emit(x, y, self.ind)
 
     def stop(self):
         self.threadactive = False
@@ -275,6 +306,7 @@ class ProgressBarThread(QThread):
 
     def run(self):
         self.threadactive = True
+        song_length = self.win.song_engine.tot_song_len
         while self.win.running:
             if self.music.get_pos() == -1:
                 # song finished running
@@ -282,7 +314,7 @@ class ProgressBarThread(QThread):
                 return
 
             curr_progress = self.music.get_pos() / 1000  # in seconds
-            progress_percentage = curr_progress / self.win.total_song_length * 100
+            progress_percentage = curr_progress / song_length * 100
             self.progress.emit(int(progress_percentage))
 
             time.sleep(self.dt)
@@ -299,15 +331,17 @@ from rclpy.node import Node
 from threading import Thread
 from std_msgs.msg import Int16
 from geometry_msgs.msg import Twist
-from  tf2_msgs.msg import TFMessage
+from tf2_msgs.msg import TFMessage
 
 
 class LocationSubscriberNode(Node):
-    def __init__(self):
+    def __init__(self, win, ind):
         super().__init__('TF_subscriber')
-        self.freq = 10
-        self.subscription = self.create_subscription(TFMessage,'tf',self.listener_callback, self.freq)
-        self.msg = 15
+
+        self.ind = ind
+        freq = 10
+        self.tf_subscriber = self.create_subscription(TFMessage, 'tf', self.listener_callback, freq)
+
         self.x = 0
         self.y = 0
         self.theta = 0
@@ -348,120 +382,196 @@ class LocationSubscriberNode(Node):
         #                 w=0.7030051946640015)))])
 
 
+class LedStateSubscriberNode(Node):
+    def __init__(self, win, ind):
+        super().__init__('LedState_Subscriber')
+        self.win = win
+        self.ind = ind
+
+        freq = 10
+        # node_name = f'clicked_{ind}'
+        node_name = f'led_state_{ind}'
+        self.clicked_subscriber = self.create_subscription(Int16, node_name, self.listener_callback, freq)
+
+        self.clicked_state = 0
+
+    def listener_callback(self, msg):
+        prev_clicked_state = self.clicked_state
+
+        # print(f"my led state msg: {msg.data}")
+        self.clicked_state = msg.data
+
+        if self.clicked_state == 2 and prev_clicked_state == 1:
+            'Clicked when LED was lit up'
+            self.win.screens["game"].autoclickers[self.ind].score += 1
+
+
 class Ros2QTSubscriber(QThread):
     camera_msg = QtCore.pyqtSignal(float, float, float)
+    clicked_msg = QtCore.pyqtSignal(int)
 
-    def __init__(self, win):
+    def __init__(self, win, ind):
         QThread.__init__(self)
         self.threadactive = False
         self.win = win
-        self.minimal_subscriber = LocationSubscriberNode()
-        self.dt = 1/self.minimal_subscriber.freq
+        self.ind = ind
 
-    def run_ros_listener(self):
-        while self.threadactive:
-            rclpy.spin_once(self.minimal_subscriber)
-            time.sleep(self.dt)  # 10Hz
+        self.loc_subscriber = LocationSubscriberNode(self.win, self.ind)
+        self.clicked_subscriber = LedStateSubscriberNode(self.win, self.ind)
 
-        self.minimal_subscriber.destroy_node()
+        self.prev_num_of_clicks = 0
+        self.wrong_clicks = 0
+        self.dt = 0.05
 
     def run(self):
        # in a different thread
         self.threadactive = True
-        tf_listener_thread = Thread(target=self.run_ros_listener)
-        tf_listener_thread.start() # starts the infinite loop. since we don't call thread.join() we don't wait for execute
-
+        listener_thread = Thread(target=self.run_ros_listener) # listen to tf and click messages
+        listener_thread.start() # starts the infinite loop. since we don't call thread.join() we don't wait for execute
 
         while self.win.running and self.threadactive:
-            x = self.minimal_subscriber.x
-            y = self.minimal_subscriber.y
-            theta = self.minimal_subscriber.theta
+            x = self.loc_subscriber.x
+            y = self.loc_subscriber.y
+            theta = self.loc_subscriber.theta
             self.camera_msg.emit(x, y, theta)
+
+            curr_num_of_clicks = self.clicked_subscriber.clicked_state
+            if self.prev_num_of_clicks != curr_num_of_clicks:
+                self.prev_num_of_clicks = curr_num_of_clicks
+                self.clicked_msg.emit(curr_num_of_clicks - self.wrong_clicks)
+            else:
+                'Wrong click'
+                self.wrong_clicks += 1
+
             time.sleep(self.dt)
 
+    def run_ros_listener(self):
+        while self.threadactive:
+            rclpy.spin_once(self.loc_subscriber)
+            rclpy.spin_once(self.clicked_subscriber)
+            time.sleep(self.dt)  # 10Hz
+
+        self.loc_subscriber.destroy_node()
+        self.clicked_subscriber.destroy_node()
 
     def stop(self):
         self.threadactive = False
         self.quit()
 
 
-class LEDMasterNode(Node):
-    def __init__(self, ind):
-        super().__init__("LEDMasterNode")
-        self.LED_cmd_publisher_ = self.create_publisher(Int16, f"LED_cmd_{ind}", 10)
-
-    def publish_command(self, cmd):
-        msg = Int16()
-        msg.data = cmd
-        self.LED_cmd_publisher_.publish(msg)
-
-
-class QT2RosLEDPublisher(QThread):
+class QT2RosPublisher(QThread):
     '''
     Publish LED commands to ROS topic
     '''
 
-    dt = 0.2  # sec
+    dt = 0.1  # sec
     LED_msg = QtCore.pyqtSignal(Int16)
+    nav_msg = QtCore.pyqtSignal(float, float)  # x, rz
 
     def __init__(self, ind):
         QThread.__init__(self)
         self.LED_cmd_publisher = LEDMasterNode(ind)
-        self.currCmd = 0
+        self.curr_LED_cmd = 0
+
+        self.nav_node = NavMasterNode(ind)
+        self.curr_nav_cmd = 0
 
     def run_led_publisher(self, cmd):
         self.LED_cmd_publisher.publish_command(cmd)
-        self.currCmd = cmd
+        self.curr_LED_cmd = cmd
+
+    def run_nav_publisher(self, x, rz):
+        # self.curr_nav_cmd = [x, 0.0, 0.0, 0.0, 0.0, rz]
+        self.nav_node.publish_command(x, 0.0, 0.0, 0.0, 0.0, rz)
 
     def stop(self):
         self.threadactive = False
+        self.run_led_publisher(0.0)
+        self.run_nav_publisher(0.0, 0.0)
         self.quit()
 
 
-
-class QT2RosNavPublisher(QThread):
-    '''
-    publish navigation commands
-    '''
-
-    nav_msg = QtCore.pyqtSignal(float, float, float, float, float, float)
-
+# class QT2RosNavPublisher(QThread):
+#     '''
+#     publish navigation commands in a game-integrated thread
+#     '''
+#
+#     # nav_msg = QtCore.pyqtSignal(float, float, float, float, float, float)
+#
+#     def __init__(self, win, ind):
+#         QThread.__init__(self)
+#         self.win = win
+#         self.nav_master_node = NavMasterNode(self.win, ind)
+#         # self.currCmd = 0
+#
+#     def run_nav_publisher(self, x, y, z, rx, ry, rz):
+#         self.nav_master_node.publish_command(x, 0.0, 0.0, 0.0, 0.0, rz)
+#         # self.currCmd = cmd
+#
+#     def stop(self):
+#         self.threadactive = False
+#         self.nav_master_node.stop()
+#         self.quit()
+class LEDMasterNode(Node):
     def __init__(self, ind):
-        QThread.__init__(self)
-        self.Nav_cmd_publisher = NavMasterNode(ind)
-        # self.currCmd = 0
+        super().__init__("LEDMasterNode")
+        self.LED_cmd_publisher_ = self.create_publisher(Int16, f"LED_cmd_{ind}", 10)
+        self.msg = Int16()
 
-    def run_nav_publisher(self, x, y, z, rx, ry, rz):
-        self.Nav_cmd_publisher.publish_command(x, 0.0, 0.0, 0.0, 0.0, rz)
-        # self.currCmd = cmd
-
-    def stop(self):
-        self.threadactive = False
-        self.Nav_cmd_publisher.stop()
-        self.quit()
+    def publish_command(self, led_state_on):
+        self.msg.data = led_state_on
+        self.LED_cmd_publisher_.publish(self.msg)
 
 
 class NavMasterNode(Node):
     def __init__(self, ind):
-        super().__init__("LEDMasterNode")
+        super().__init__("NavMasterNode")
         self.ind = ind
-        self.Nav_cmd_publisher_ = self.create_publisher(Twist, f"cmd_vel_{self.ind}", 10)
-        # commands for turning in circle
-        self.possible_cmds_x = [0.0, -0.05, 0.0, 0.0, 0.0, -0.05, 0.0, 0.0]
-        self.possible_cmds_rz = [0.0, 0.0, 0.0, -0.8, 0.0, 0.0, 0.0, 0.8]
-        self.threadactive = True
-        self.publishingThread = Thread(target=self.publish_command)
-        self.publishingThread.start()  # starts the infinite loop. since we don't call thread.join() we don't wait for execute
+        self.nav_pub = self.create_publisher(Twist, f"cmd_vel_{ind}", 10)
+        self.msg = Twist()
 
-    def publish_command(self):
-        while self.threadactive:
-            msg = Twist()
-            msg.linear.x = self.possible_cmds_x[self.ind]
-            msg.angular.z = self.possible_cmds_rz[self.ind]
-            self.ind = (self.ind + 1) % len(self.possible_cmds_x)
-            self.Nav_cmd_publisher_.publish(msg)
-            time.sleep(4.0)
+    def publish_command(self, x, y, z, rx, ry, rz):
+        self.msg.linear.x = x
+        self.msg.angular.z = rz
 
-    def stop(self):
-        self.threadactive = False
+        self.nav_pub.publish(self.msg)
+
+# class NavMasterNode(Node):
+#     def __init__(self, win, ind):
+#         super().__init__("LEDMasterNode")
+#         self.win = win
+#         self.ind = ind
+#         self.Nav_cmd_publisher_ = self.create_publisher(Twist, f"cmd_vel_{self.ind}", 10)
+#         # commands for turning in square
+#         self.moves = self.win.song_engine.moves[self.ind]
+#         self.threadactive = False
+#         self.publishingThread = Thread(target=self.publish_command)
+#         self.publishingThread.start()  # starts the infinite loop. since we don't call thread.join() we don't wait for execute
+#
+#     def publish_command(self):
+#         self.threadactive = True
+#         msg = Twist()
+#         i = 0
+#         moves_x, moves_rz = self.moves
+#
+#         t0 = self.win.song_start_time
+#         note_times = self.win.note_times
+#         iteration = 0
+#         while self.win.running and self.threadactive:
+#             time_to_sleep = t0 + note_times[iteration] - time.time()
+#             time.sleep(time_to_sleep)
+#             iteration += 1
+#             msg.linear.x = moves_x[i]
+#             msg.angular.z = moves_rz[i]
+#             i = (iteration) % len(moves_x)
+#             self.Nav_cmd_publisher_.publish(msg)
+#
+#         msg.linear.x = 0.0
+#         msg.angular.z = 0.0
+#         self.Nav_cmd_publisher_.publish(msg)
+#
+#     def publish_now(self):
+#
+#     def stop(self):
+#         self.threadactive = False
 #endregion

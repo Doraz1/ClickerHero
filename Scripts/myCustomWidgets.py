@@ -1,12 +1,12 @@
 import time
 import numpy as np
-import PyQt5
-from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QPushButton, QHBoxLayout, QInputDialog, QLineEdit,\
-    QListWidget, QListWidgetItem
+from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout
 from PyQt5.QtGui import QColor, QPainter, QBrush, QPen
+from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
-from Scripts.threads import ACBlinkThread, ACMoveThread
-from Scripts.threads import Ros2QTSubscriber, QT2RosLEDPublisher, QT2RosNavPublisher
+from Scripts.threads import ACNavBlinkThread, ACMoveThread
+from Scripts.threads import Ros2QTSubscriber
+
 
 class AutoClicker(QWidget):
     '''
@@ -20,29 +20,35 @@ class AutoClicker(QWidget):
         self.score = 0
         self.x = 0
         self.y = 0
+        self.clicked = False
+
+        'LED + navigation thread'
+        self.blinkNavThread = ACNavBlinkThread(self.win, self)
+
         'Movement thread - only for on-screen animations'
-        self.MoveThread = ACMoveThread(self.win, self, self.ind) # both for sim and real
+        self.MoveThread = ACMoveThread(self.win, self) # both for sim and real
         self.MoveThread.clicker_pos.connect(self.move)
 
-        'LED thread'
-        self.clickerBlinkThread = ACBlinkThread(self.win, self, self.ind)
-
         if not self.win.simActive:
-            'Location subscriber'
-            self.rosSubscriberThread = Ros2QTSubscriber(self.win)
+            'Location + clicked subscriber'
+            self.rosSubscriberThread = Ros2QTSubscriber(self.win, self.ind)
             self.rosSubscriberThread.camera_msg.connect(self.MoveThread.move_based_on_real_inputs)
-
-            'Navigation publisher'
-            self.rosNavPublisherThread = QT2RosNavPublisher(self.ind)
+            self.rosSubscriberThread.clicked_msg.connect(self.robot_clicked_method)
         else:
             pass
+
+    def robot_clicked_method(self, num_clicks):
+        # self.blinkNavThread.ros_publisher.run_led_publisher(cmd=10*self.blinkNavThread.difficulty + 2)  # blink success
+        # self.score = num_clicks
+        pass
 
     def move(self, x, y, index):
         self.x = x
         self.y = y
 
         if self.win.DEBUG:
-            print(f"Moving clicker to new coords: {x, y}")
+            # print(f"Moving clicker to new coords: {x, y}")
+            pass
 
         self.animation.move(x, y)
 
@@ -50,12 +56,13 @@ class AutoClicker(QWidget):
         self.animation.reset_blink()
 
     def start_threads(self):
-        print("Starting threads")
-        self.clickerBlinkThread.start()
+        if self.win.DEBUG:
+            print("Starting threads")
+        self.blinkNavThread.start()
         self.MoveThread.start()
 
         if not self.win.simActive:
-            self.rosNavPublisherThread.start()
+            # self.rosNavPublisherThread.start()
             self.rosSubscriberThread.start()
         else:
             pass
@@ -66,12 +73,11 @@ class AutoClicker(QWidget):
         # reset threads
         self.reset_blink()
         self.MoveThread.stop()
+
         if not self.win.simActive:
-            self.rosLEDPublisherThread.stop()
-            self.rosNavPublisherThread.stop()
             self.rosSubscriberThread.stop()
         else:
-            self.clickerBlinkThread.stop()
+            self.blinkNavThread.stop()
 
 
 class AutoClickerAnimation(QWidget):
@@ -104,6 +110,12 @@ class AutoClickerAnimation(QWidget):
         self.alphaLevels = np.arange(30, 255, int(step), dtype=np.int32)
 
     def activateLEDs(self):
+        """
+        Initialize a background thread that blinks the animation, resets the color and terminates.
+
+        :return:
+        """
+
         self.helper.leds_active = True
 
         self.blinkState = self.numBlinkLevels - 1
@@ -157,12 +169,11 @@ class ACAnimMouseHandler(QWidget):
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         self.isClicked = False
         self.leds_active = False
-        self.firstRun = True
         self.region = None
         self.radius = 100
 
     def sizeHint(self):
-        return PyQt5.QtCore.QSize(60, 120)
+        return QtCore.QSize(60, 120)
 
 
     def mouseMoveEvent(self, e):
@@ -190,76 +201,6 @@ class ACAnimMouseHandler(QWidget):
 
 
 
-class ChangeUserList(QWidget):
-    def __init__(self, win, database):
-        super(ChangeUserList, self).__init__()
-        self.win = win
-        self.database = database
-        self.listWidget = QListWidget()
-        self.layout = QHBoxLayout()
-        self.width = 200
-        self.height = 300
-
-        self.createList()
-
-    def createList(self):
-        # create layout
-        self.listWidget.setSelectionMode(PyQt5.QtWidgets.QAbstractItemView.SingleSelection)
-        self.listWidget.setGeometry(PyQt5.QtCore.QRect(int((self.win.width - self.width) / 2), int((self.win.height - self.height)/2), self.width, self.height))
-        self.move(int((self.win.width - self.width) / 2), int((self.win.height - self.height)/2))
-        # fetch player names and populate list
-        rows = self.database.load_all()
-        for player in rows:
-            firstName = player[0]
-            lastName = player[1]
-            item = QListWidgetItem(f"{firstName} {lastName}")
-            self.listWidget.addItem(item)
-
-        # on player choice - load player
-        self.listWidget.itemClicked.connect(self.loadPlayerFromList)
-        self.layout.addWidget(self.listWidget)
-
-        button_new_player = QPushButton()
-        button_new_player.setText("Add new")
-        button_new_player.clicked.connect(self.addPlayer)
-
-        self.layout.addWidget(button_new_player)
-        self.setLayout(self.layout)
-
-    def addPlayer(self):
-        print("Adding player")
-
-        def getAge():
-            i, okPressed = QInputDialog.getInt(self, "Player age", "Your age:", 40, 18, 100, 1)
-            if okPressed:
-                return i
-
-        def getName(type="first"):
-            text, okPressed = QInputDialog.getText(self, "Player name", f"Your {type} name:", QLineEdit.Normal, "")
-            if okPressed and text != '':
-                return text
-
-        playerFirstName = getName("first")
-        playerLastName = getName("last")
-        playerAge = getAge()
-
-        self.database.insert(playerFirstName, playerLastName, playerAge)
-        self.loadPlayer(playerFirstName, playerLastName)
-
-    def loadPlayer(self, firstName, lastName):
-        self.database.load(firstName, lastName)
-
-        # close player menu
-        self.win.active_screen.show()
-        self.close()
-
-    def loadPlayerFromList(self):
-        chosen_players = self.listWidget.selectedItems()
-        x = str(chosen_players[0].text())
-        name = x.split(" ")
-        firstName = name[0]
-        lasttName = name[1]
-        self.loadPlayer(firstName, lasttName)
 
 
 
