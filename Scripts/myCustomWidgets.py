@@ -26,7 +26,7 @@ class AutoClicker(QWidget):
         self.blinkNavThread = ACNavBlinkThread(self.win, self)
 
         'Movement thread - only for on-screen animations'
-        self.MoveThread = ACMoveThread(self.win, self) # both for sim and real
+        self.MoveThread = ACMoveThread(self.win, self) # both for sim and real, in real it's camera locations fed into the animation locations
         self.MoveThread.clicker_pos.connect(self.move)
 
         if not self.win.simActive:
@@ -38,8 +38,6 @@ class AutoClicker(QWidget):
             pass
 
     def robot_clicked_method(self, num_clicks):
-        # self.blinkNavThread.ros_publisher.run_led_publisher(cmd=10*self.blinkNavThread.difficulty + 2)  # blink success
-        # self.score = num_clicks
         pass
 
     def move(self, x, y, index):
@@ -71,13 +69,13 @@ class AutoClicker(QWidget):
         self.score = 0
 
         # reset threads
-        self.reset_blink()
-        self.MoveThread.stop()
-
-        if not self.win.simActive:
-            self.rosSubscriberThread.stop()
+        if self.win.simActive:
+            self.reset_blink()  # simulated blink
         else:
-            self.blinkNavThread.stop()
+            self.rosSubscriberThread.stop()
+
+        self.MoveThread.stop()  # animation movement - in sim it's ant movement, in non-sim it's cam locations
+        self.blinkNavThread.stop()
 
 
 class AutoClickerAnimation(QWidget):

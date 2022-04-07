@@ -27,7 +27,7 @@ class SongEngine:
         if self.song_name == 'one_kiss':
             phase_list = [(0, 123.85)]
         elif self.song_name == 'cant_help_falling_in_love':
-            phase_list = [(0.05, 67.1), (65, 70), (79, 67.1)]
+            phase_list = [(0.5, 67.1), (65, 70), (79, 67.1)]
 
         else:
             phase_list = [(0, 123)]
