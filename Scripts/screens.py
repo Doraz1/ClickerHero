@@ -32,6 +32,11 @@ class Screen:
     btn_text_font = QFont('Times', 25, QFont.Bold)
     btn_opacity = 30
 
+    #start button style
+    start_btn_bg_color = "(150, 180, 255, 0.9)"
+    start_btn_width = 550
+    start_btn_dx = 275
+
     def __init__(self, win, name):
         self.win = win
         self.name = name
@@ -40,7 +45,7 @@ class Screen:
         self.buttons = []
         self.autoclickers = []
         self.autoClickerAnims = []
-        self.progressBars = []
+        self.progress_bar = None
 
     def show(self):
         self.win.setWindowTitle(self.name)
@@ -77,6 +82,21 @@ class Screen:
                           "padding: 3px;"
                           "margin: 2px;")
         lbl.setAlignment(Qt.AlignCenter)
+
+    def stylize_start_btn(self, btn, pos_x, pos_y, logic, text=""):
+        btn.setText(text)
+        btn.clicked.connect(logic)
+
+        btn.setFont(self.btn_text_font)
+        btn.setGeometry(pos_x, pos_y, self.start_btn_width, self.btn_height)
+        btn.setStyleSheet(f"background-color: rgba{self.start_btn_bg_color}; "
+                          f"color: rgba{self.btn_text_color};"
+                          "border-radius: 10;"
+                          "border: 1px solid black;"
+                          "text-align: center;"
+                          f"opacity: {self.btn_opacity};"  # 0-255
+                          "padding: 3px;"
+                          "margin: 2px;")
 
     def stylize_btn(self, btn, pos_x, pos_y, logic, text=""):
         # self.closeButton.setShortcut('Ctrl+D')  # shortcut key
@@ -118,23 +138,33 @@ class MainScreen(Screen):
         # Buttons
         btn_x, btn_y = int((self.win.width - self.btn_width) / 2), self.btn_initial_y  # first button coordinates
         dy = self.btn_height + self.btn_margin_y
+        button_start_normal = QPushButton(self.win)
 
-        button_start = QPushButton(self.win)
-        self.stylize_btn(button_start, btn_x, btn_y, self.win.btn_move_to_song_choice_screen, "התחל משחק")
-        button_start.setShortcut('Return')  # shortcut key
-        button_start.setToolTip("Start playing the game")  # Tool tip
-        self.buttons.append(button_start)
+        'Start normal game'
+        self.stylize_start_btn(button_start_normal, btn_x - self.start_btn_dx, btn_y, self.win.btnHandler.btn_move_to_song_choice_screen,
+                               "התחל משחק קצב")
+        # button_start.setShortcut('Return')  # shortcut key
+        button_start_normal.setToolTip("Start playing normal game")  # Tool tip
+        self.buttons.append(button_start_normal)
+
+        'Start inhibition game'
+        button_start_inhib = QPushButton(self.win)
+        self.stylize_start_btn(button_start_inhib, btn_x + self.start_btn_dx, btn_y, self.win.btnHandler.btn_move_to_combo_game_screen,
+                               "התחל משחק קומבו")
+        # button_start.setShortcut('Return')  # shortcut key
+        button_start_inhib.setToolTip("Start playing inhibition game")  # Tool tip
+        self.buttons.append(button_start_inhib)
 
         button_customization = QPushButton(self.win)
-        self.stylize_btn(button_customization, btn_x, btn_y + dy, self.win.btn_move_to_customization_screen, "customization")
+        self.stylize_btn(button_customization, btn_x, btn_y + dy, self.win.btnHandler.btn_move_to_customization_screen, "התאמה אישית")
         self.buttons.append(button_customization)
 
         button_instructions = QPushButton(self.win)
-        self.stylize_btn(button_instructions, btn_x, btn_y + 2*dy, self.win.btn_instructions, "הוראות")
+        self.stylize_btn(button_instructions, btn_x, btn_y + 2*dy, self.win.btnHandler.btn_instructions, "הוראות")
         self.buttons.append(button_instructions)
 
         button_exit = QPushButton(self.win)
-        self.stylize_btn(button_exit, btn_x, btn_y + 3*dy, self.win.btn_exit, "יציאה")
+        self.stylize_btn(button_exit, btn_x, btn_y + 3*dy, self.win.btnHandler.btn_exit, "יציאה")
         button_exit.setShortcut('Escape')  # shortcut key
         button_exit.setToolTip("Exit the game application")  # Tool tip
         self.buttons.append(button_exit)
@@ -171,15 +201,15 @@ class CustomizationScreen(Screen):
         dy = self.btn_height + self.btn_margin_y
 
         button_change_user = QPushButton(self.win)
-        self.stylize_btn(button_change_user, btn_x, btn_y + 0 * dy, self.win.btn_change_user, "Change user")
+        self.stylize_btn(button_change_user, btn_x, btn_y + 0 * dy, self.win.btnHandler.btn_change_user, "החלף משתמש")
         self.buttons.append(button_change_user)
 
         button_change_difficulty = QPushButton(self.win)
-        self.stylize_btn(button_change_difficulty, btn_x, btn_y + 1 * dy, self.win.btn_change_difficulty, "Change difficulty")
+        self.stylize_btn(button_change_difficulty, btn_x, btn_y + 1 * dy, self.win.btnHandler.btn_change_difficulty, "שנה רמת קושי")
         self.buttons.append(button_change_difficulty)
 
         button_return_to_main = QPushButton(self.win)
-        self.stylize_btn(button_return_to_main, btn_x, btn_y + 2*dy, self.win.btn_return_to_main, "חזרה לתפריט הראשי")
+        self.stylize_btn(button_return_to_main, btn_x, btn_y + 2*dy, self.win.btnHandler.btn_return_to_main, "חזרה לתפריט הראשי")
         self.buttons.append(button_return_to_main)
 
 
@@ -217,7 +247,7 @@ class InstructionsScreen(Screen):
         dy = self.btn_height + self.btn_margin_y
 
         button_return_to_main = QPushButton(self.win)
-        self.stylize_btn(button_return_to_main, btn_x, btn_y + 3*dy, self.win.btn_return_to_main, "חזרה לתפריט הראשי")
+        self.stylize_btn(button_return_to_main, btn_x, btn_y + 3*dy, self.win.btnHandler.btn_return_to_main, "חזרה לתפריט הראשי")
         self.buttons.append(button_return_to_main)
 
 
@@ -246,19 +276,19 @@ class SecondScreen(Screen):
 
         button_song1 = QPushButton(self.win)
         self.stylize_song_choice_btn(button_song1, btn_x, btn_y,
-                                     self.win.btn_play_one_kiss, "One kiss")
+                                     self.win.btnHandler.btn_play_one_kiss, "One kiss")
         self.buttons.append(button_song1)
 
         button_song2 = QPushButton(self.win)
         self.stylize_song_choice_btn(button_song2, btn_x, btn_y + dy,
-                                     self.win.btn_play_cant_help_falling_in_love, "Can't Help Falling In Love")
+                                     self.win.btnHandler.btn_play_cant_help_falling_in_love, "Can't Help Falling In Love")
         button_song2.setShortcut('Return')  # shortcut key
         button_song2.setToolTip("Start playing current song")  # Tool tip
         self.buttons.append(button_song2)
 
         button_return_to_main = QPushButton(self.win)
         self.stylize_btn(button_return_to_main, btn_x, btn_y + 2*dy,
-                         self.win.btn_return_to_main, "חזרה לתפריט הראשי")
+                         self.win.btnHandler.btn_return_to_main, "חזרה לתפריט הראשי")
         button_return_to_main.setShortcut('Escape')  # shortcut key
         self.buttons.append(button_return_to_main)
 
@@ -292,14 +322,15 @@ class SecondScreen(Screen):
 
         player_scores = self.win.db.scores
         i = 0
-        for score in player_scores:
+        print(player_scores)
+        for score in player_scores[:-1]:
             score_label = self.scoreButtonLabels[i]
             text = f"Top Score: {score}"
             score_label.setText(text)
             i += 1
 
 
-class GameScreen(Screen):
+class NormalGameScreen(Screen):
     prog_bar_bg_color = "(150, 120, 180, 1.0)"
     prog_bar_width = 800
     prog_bar_height = 150
@@ -313,20 +344,19 @@ class GameScreen(Screen):
     def create_screen(self):
         # Background
         bg_image_path = ASSET_PATH + "BG_game.jpg"
-        print(bg_image_path)
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
 
         # Buttons
         button_pause = QPushButton(self.win)
-        self.stylize_btn(button_pause, 0, 10, self.win.btn_pause_game, "P")
+        self.stylize_btn(button_pause, 0, 10, self.win.btnHandler.btn_pause_game, "P")
         self.buttons.append(button_pause)
 
         exit_button_height = 10
         button_exit_to_main = QPushButton(self.win)
         end_of_screen_pos = self.win.width - self.btn_width
-        self.stylize_btn(button_exit_to_main, end_of_screen_pos, exit_button_height, self.win.btn_stop_game, "חזרה לתפריט הראשי")
+        self.stylize_btn(button_exit_to_main, end_of_screen_pos, exit_button_height, self.win.btnHandler.btn_stop_game, "חזרה לתפריט הראשי")
         button_exit_to_main.setShortcut('Escape')  # shortcut key
         self.buttons.append(button_exit_to_main)
 
@@ -339,7 +369,8 @@ class GameScreen(Screen):
         progress_bar = QProgressBar(self.win)
         prog_bar_height = score_lbl_height + self.lbl_height + self.prog_bar_margin_y
         self.stylize_progress_bar(progress_bar, int((self.win.width - self.prog_bar_width) / 2), prog_bar_height)
-        self.progressBars.append(progress_bar)
+
+        self.progress_bar = progress_bar
 
     def stylize_progress_bar(self, bar, pos_x, pos_y):
         bar.setGeometry(pos_x, pos_y, self.prog_bar_width, self.prog_bar_height)
@@ -354,8 +385,7 @@ class GameScreen(Screen):
     def show(self):
         super().show()
 
-        for bar in self.progressBars:
-            bar.show()
+        self.progress_bar.show()
 
         for clicker in self.autoclickers:
             clicker.animation.show()
@@ -366,12 +396,69 @@ class GameScreen(Screen):
     def hide(self):
         super().hide()
 
-        for bar in self.progressBars:
-            bar.hide()
+        self.progress_bar.hide()
 
         for clicker in self.autoclickers:
             clicker.animation.hide()
 
+
+class ComboGameScreen(Screen):
+
+    def __init__(self, win, name):
+        super().__init__(win, name)
+        self.create_screen()
+        self.hide()
+
+    def create_screen(self):
+        # Background
+        bg_image_path = ASSET_PATH + "gym.jpg"
+        bg_label = QLabel(self.win)
+        self.create_background(bg_label, bg_image_path)
+        self.labels.append(bg_label)
+
+        # Buttons
+        button_pause = QPushButton(self.win)
+        self.stylize_btn(button_pause, 0, 10, self.win.btnHandler.btn_pause_game, "P")
+        self.buttons.append(button_pause)
+
+        exit_button_height = 10
+        button_exit_to_main = QPushButton(self.win)
+        end_of_screen_pos = self.win.width - self.btn_width
+        self.stylize_btn(button_exit_to_main, end_of_screen_pos, exit_button_height, self.win.btnHandler.btn_stop_game, "חזרה לתפריט הראשי")
+        button_exit_to_main.setShortcut('Escape')  # shortcut key
+        self.buttons.append(button_exit_to_main)
+
+        score_lbl_height = exit_button_height + 2*self.btn_height
+        label_score = QLabel(self.win)
+        self.stylize_lbl(label_score, int((self.win.width - self.lbl_width) / 2), score_lbl_height, f"קומבו:{self.win.score} ")
+        self.labels.append(label_score)
+
+        max_score_lbl_height = score_lbl_height + self.lbl_height
+        label_max_score = QLabel(self.win)
+        self.stylize_lbl(label_max_score, int((self.win.width - self.lbl_width) / 2), max_score_lbl_height, f"שיא נוכחי: {-1}")
+        label_max_score.setFont(QFont('MV Boli', 40, QFont.Bold))
+        self.labels.append(label_max_score)
+
+        dif_lbl_height = max_score_lbl_height + self.lbl_height
+        label_curr_difficulty = QLabel(self.win)
+        self.stylize_lbl(label_curr_difficulty, int((self.win.width - self.lbl_width) / 2), dif_lbl_height, f"רמת קושי: {-1}")
+        label_curr_difficulty.setFont(QFont('MV Boli', 40, QFont.Bold))
+        self.labels.append(label_curr_difficulty)
+
+    def show(self):
+        super().show()
+        self.labels[1].setText(f"קומבו: {self.win.score}")  # score label
+        self.labels[2].setText(f"שיא נוכחי: {self.win.song_engine.max_combo}")
+        self.labels[3].setText(f"רמת קושי: {self.win.screens['game'].autoclickers[0].pubThread.difficulty}")
+
+
+
+    def hide(self):
+
+        for clicker in self.autoclickers:
+            clicker.animation.hide()
+
+        super().hide()  # hide all labels and buttons
 
 class ScoreScreen(Screen):
     # score screen label style
@@ -402,6 +489,6 @@ class ScoreScreen(Screen):
         dy = self.btn_height + self.btn_margin_y
 
         button_return_to_main = QPushButton(self.win)
-        self.stylize_btn(button_return_to_main, btn_x, btn_y + dy, self.win.btn_return_to_main, "חזרה לתפריט הראשי")
+        self.stylize_btn(button_return_to_main, btn_x, btn_y + dy, self.win.btnHandler.btn_return_to_main, "חזרה לתפריט הראשי")
         button_return_to_main.setShortcut('Escape')  # shortcut key
         self.buttons.append(button_return_to_main)

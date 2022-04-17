@@ -1,9 +1,10 @@
 from mutagen.mp3 import MP3
 import numpy as np
+import os
 
 
-class SongEngine:
-    def __init__(self, song_name, song_path):
+class NormalSongEngine:
+    def __init__(self, SONGS_PATH, song_name):
         """
         Creates the song's notes (LED commands) and moves (trajectory commands).
 
@@ -12,7 +13,11 @@ class SongEngine:
         :param bpm:
         """
         self.song_name = song_name
-        self.song_path = song_path
+        self.song_dict = {
+            "one_kiss": {"path": os.path.join(SONGS_PATH, "One Kiss_cropped.mp3")},
+            "cant_help_falling_in_love": {"path": os.path.join(SONGS_PATH, "Can't Help Falling In Love.mp3")}
+                          }
+        self.song_path = self.song_dict[song_name]["path"]
         self.audio = MP3(self.song_path)
         self.tot_song_len = self.audio.info.length
 
@@ -21,14 +26,14 @@ class SongEngine:
         self.notes = self.get_autoclicker_notes(self.note_times)
         self.moves = self.get_autoclicker_moves(self.note_times)
         self.start_from_second = 0  # start of song
+        self.difficulty = None
 
     def get_note_times(self):
         'Take a list of (phase_start, phase_bpm) and generate time vec'
         if self.song_name == 'one_kiss':
             phase_list = [(0, 123.85)]
         elif self.song_name == 'cant_help_falling_in_love':
-            phase_list = [(0.5, 67.1), (65, 70), (79, 67.1)]
-
+            phase_list = [(0.17, 67.1), (65, 67.1), (79, 67.1)]
         else:
             phase_list = [(0, 123)]
 
@@ -256,3 +261,68 @@ class SongEngine:
         moves.append(ac3_moves)
 
         return moves
+
+    def set_difficulty(self, dif):
+        pass
+
+
+class ComboSongEngine:
+    def __init__(self, SONGS_PATH, song_name):
+        self.song_name = song_name
+        self.song_dict = {
+            "upbeat_trans_music": {"path": os.path.join(SONGS_PATH, "Upbeat trans music.mp3")}
+        }
+        self.song_path = self.song_dict[song_name]["path"]
+        self.audio = MP3(self.song_path)
+        self.tot_song_len = self.audio.info.length
+        self.difficulty = 1
+        self.max_combo = 0
+        self.difficulty_dict = {
+            1: {"avg_TOff": 5, "prob_green": 1},
+            2: {"avg_TOff": 4, "prob_green": 1},
+            3: {"avg_TOff": 3.5, "prob_green": 0.9},
+            4: {"avg_TOff": 3.5, "prob_green": 0.85},
+            5: {"avg_TOff": 3, "prob_green": 0.85},
+            6: {"avg_TOff": 2.5, "prob_green": 0.8},
+            8: {"avg_TOff": 2.5, "prob_green": 0.7},
+            9: {"avg_TOff": 2, "prob_green": 0.7},
+            10: {"avg_TOff": 1.8, "prob_green": 0.7},
+        }
+        self.steps_per_lvl = 10
+        self.start_from_second = 0
+
+    def generate_commands(self, difficulty=-1):
+        if difficulty == -1:
+            difficulty = self.difficulty
+
+        self.set_difficulty(difficulty)
+
+        notes = self.generate_notes()
+        moves = self.generate_moves()
+        return notes, moves
+
+    def set_difficulty(self, dif):
+        self.difficulty = dif
+
+    def generate_notes(self):
+        dif_dict = self.difficulty_dict[self.difficulty]
+        avg_TOff = dif_dict["avg_TOff"]
+        p = dif_dict["prob_green"]
+
+        'Generate notes'
+        variance = 0.2
+
+        signs = np.random.choice([1, -1], self.steps_per_lvl, p=[p, 1 - p])  # choose color - green or red
+        preset_on_time = 2
+        TOn = preset_on_time*np.ones(self.steps_per_lvl)
+        TOff = np.random.uniform(avg_TOff-variance, avg_TOff + variance, self.steps_per_lvl)
+        notes = zip(signs, TOn, TOff)
+
+        return notes
+
+    def generate_moves(self):
+        moves = []
+        return moves
+
+
+

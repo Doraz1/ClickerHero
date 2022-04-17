@@ -1,4 +1,3 @@
-import os
 import sys
 
 import rclpy
@@ -13,8 +12,9 @@ import pygame.mixer
 from Scripts.myCustomWidgets import AutoClicker
 from Scripts.database import PlayerDataBase, ListGenerator
 from Scripts.threads import ProgressBarThread
-from Scripts.songengine import SongEngine
-from Scripts.screens import MainScreen, CustomizationScreen, InstructionsScreen, SecondScreen, GameScreen, ScoreScreen
+from Scripts.songengine import NormalSongEngine, ComboSongEngine
+from Scripts.screens import *
+import numpy as np
 
 # region Define paths
 # load assets and songs
@@ -46,7 +46,7 @@ class MyWindow(QMainWindow):
 
         'Create player database handler'
         self.db = PlayerDataBase()
-        self.score = -1
+        self.score = 0
 
         'Set screen title, icon and application style'
         self.setWindowTitle(title)
@@ -57,27 +57,33 @@ class MyWindow(QMainWindow):
         self.DEBUG = False
         self.active_screen = None
 
+        'Game parameters'
+        self.active_game = None
+        self.rclpy_initialized = False
+        self.running = False
+        self.first_run = True
+        self.paused = False
+        self.number_of_robots = 1
+        self.time_note_played = self.number_of_robots*[-1]
+        self.reaction_times = {0: [], 1: [], 2: []}
+        self.btnHandler = BtnHandler(self)
+
         main_screen = MainScreen(self, "Main Menu Screen")
         customization_screen = CustomizationScreen(self, "Customization Screen")
         instructions_screen = InstructionsScreen(self, "Instructions Screen")
         secondary_screen = SecondScreen(self, "Song choice Screen")
-        game_screen = GameScreen(self, "Game Screen")
+        combo_game_screen = ComboGameScreen(self, "Combo game Screen")
+        game_screen = NormalGameScreen(self, "Game Screen")
         score_screen = ScoreScreen(self, "Score Screen")
 
         self.screens = {'main': main_screen,
                         'customization': customization_screen,
                         'instructions': instructions_screen,
                         'song_choice': secondary_screen,
+                        'combo_game': combo_game_screen,
                         'game': game_screen,
                         'score': score_screen
                         }
-
-        'Game parameters'
-        self.rclpy_initialized = False
-        self.running = False
-        self.first_run = True
-        self.paused = False
-        self.number_of_robots = 1
         self.activate_screen("main")  # Load the main screen on game startup
         self.show()  # render
 
@@ -88,10 +94,6 @@ class MyWindow(QMainWindow):
         'Miscellaneous'
         self.user_list = None
         self.prog_bar_thread = None
-
-    # region Screen navigation buttons
-    def refresh_screen(self):
-        self.active_screen.show()
 
     def activate_screen(self, screenName):
         if self.active_screen is not None:
@@ -104,73 +106,6 @@ class MyWindow(QMainWindow):
                 if self.DEBUG:
                     print(f"currently active: {screen.name}")
 
-    def btn_move_to_song_choice_screen(self):
-        if not self.db.playerLoaded:
-            self.btn_change_user()
-            if not self.db.playerLoaded:
-                return
-
-        self.activate_screen("song_choice")
-
-    def btn_move_to_customization_screen(self):
-        self.activate_screen("customization")
-
-    def btn_return_to_main(self):
-        self.activate_screen("main")
-
-    def btn_change_user(self):
-        self.user_list = ListGenerator(self, self.db)
-        self.user_list.make_change_user_list()
-        self.user_list.show()
-
-    def btn_change_difficulty(self):
-        self.user_list = ListGenerator(self, self.db)
-        self.user_list.make_list("difficulty")
-        self.user_list.show()
-
-    def btn_instructions(self):
-        self.activate_screen("instructions")
-
-    def btn_exit(self):
-        button_reply = QMessageBox.question(self, 'PyQt5 message', "Exit the application?",
-                                            QMessageBox.Yes | QMessageBox.No, defaultButton=QMessageBox.Yes)
-
-        if button_reply == QMessageBox.Yes:
-            sys.exit()
-
-    def btn_pause_game(self):
-        if self.paused:
-            pygame.mixer.music.unpause()
-        else:
-            pygame.mixer.music.pause()
-
-        self.paused = not self.paused
-
-    def btn_stop_game(self):
-        self.activate_screen("score")
-        pygame.mixer.music.fadeout(2000)
-
-        self.db.update_score(self.song_engine.song_name,
-                             self.score)  # attempt to update based on currently active player
-        self.reset()
-    # endregion
-
-    'Song buttons'
-    def btn_play_one_kiss(self):
-        song_name = "one_kiss"
-        song_path = os.path.join(SONGS_PATH, "One Kiss_cropped.mp3")
-
-        self.song_engine = SongEngine(song_name, song_path)
-        self.start_game()
-
-    def btn_play_cant_help_falling_in_love(self):
-        song_name = "cant_help_falling_in_love"
-        song_path = os.path.join(SONGS_PATH, "Can't Help Falling In Love.mp3")
-
-        self.song_engine = SongEngine(song_name, song_path)
-        self.start_game()
-
-    'Thread events'
     def start_game(self):
         """
         Initialize robots, start all robot threads, start the mustic and move to game screen.
@@ -179,20 +114,14 @@ class MyWindow(QMainWindow):
         """
         self.running = True
 
-        if self.first_run:
-            self.initialize_game_widgets()
-
-
-
-        pygame.mixer.init()
-        pygame.mixer.music.load(self.song_engine.song_path)
+        self.initialize_game_widgets()
 
         if self.simActive:
             print("Simulators are active!")
         else:
             print("Real life data!")
 
-            msg = "Please place the AutoClickers in their initial positions."
+            # msg = "Please place the AutoClickers in their initial positions."
             # button_reply = QMessageBox.question(self, 'PyQt5 message', msg,
             #                                     QMessageBox.Close | QMessageBox.Cancel, QMessageBox.Cancel)
             #
@@ -203,7 +132,8 @@ class MyWindow(QMainWindow):
         for clicker in self.screens["game"].autoclickers:
             clicker.start_threads()
 
-        self.prog_bar_thread.start()
+        if self.active_game == 'normal game':
+            self.prog_bar_thread.start()
 
         pygame.mixer.music.play(start=self.song_engine.start_from_second)
 
@@ -213,9 +143,6 @@ class MyWindow(QMainWindow):
 
         :return:
         """
-        self.notes = self.song_engine.notes
-        self.moves = self.song_engine.moves
-
         if not self.simActive and not self.rclpy_initialized:
             rclpy.init()
             self.rclpy_initialized = True
@@ -223,40 +150,185 @@ class MyWindow(QMainWindow):
         # Create AutoClickers and their animations (the animations MUST belong to the win for some reason)
         self.screens["game"].autoclickers = []
 
-        clicker_1 = AutoClicker(self, 0)
-        self.screens["game"].autoclickers.append(clicker_1)
-        self.screens["game"].autoClickerAnims.append(clicker_1.animation)
-        if self.number_of_robots >= 2:
-            clicker_2 = AutoClicker(self, 1)
-            self.screens["game"].autoclickers.append(clicker_2)
-            self.screens["game"].autoClickerAnims.append(clicker_2.animation)
-        if self.number_of_robots >= 3:
-            clicker_3 = AutoClicker(self, 2)
-            self.screens["game"].autoclickers.append(clicker_3)
-            self.screens["game"].autoClickerAnims.append(clicker_3.animation)
+        for i in range(self.number_of_robots):
+            if i >= 3:
+                break
+            clicker = AutoClicker(self, i)
+            self.screens["game"].autoclickers.append(clicker)
+            self.screens["game"].autoClickerAnims.append(clicker.animation)
 
-        self.prog_bar_thread = ProgressBarThread(self, pygame.mixer.music)
-        self.prog_bar_thread.progress.connect(self.update_progress_bar)
+        if self.active_game == 'normal game':
+            self.prog_bar_thread = ProgressBarThread(self, pygame.mixer.music)
+            self.prog_bar_thread.progress.connect(self.update_progress_bar)
+            difficulty = self.db.get_parameter("difficulty")  # blink difficulty - either 1, 2, or 3
+        elif self.active_game == 'combo game':
+            difficulty = 1
+
+        for clicker in self.screens["game"].autoclickers:
+            clicker.pubThread.set_difficulty(difficulty)
+
+        pygame.mixer.init()
+        pygame.mixer.music.load(self.song_engine.song_path)
 
     def update_progress_bar(self, progress):
-        self.screens['game'].progressBars[0].setValue(progress)
+        self.active_screen.progress_bar.setValue(progress)
+        self.refresh_screen()
+
+    def update_score(self, clicker_ind, click_time):
+        note_time = self.time_note_played[clicker_ind]
+        reaction_time = click_time - note_time
+        self.reaction_times[clicker_ind].append(reaction_time)
+        # print(f"logged reaction time: {round(reaction_time, 2)}[s] since note time is {note_time} and clicktime is {click_time}")
+        if self.active_game == 'normal game':
+            self.score += round(1 / reaction_time, 1)  # score based on reaction time
+        elif self.active_game == 'combo game':
+            self.score += 1
+            difficulty_incr_thresh = 2
+            required_difficulty = 1 + int(self.score / difficulty_incr_thresh)
+            print(f"curr score: {self.score} req dif: {required_difficulty}")
+            if self.song_engine.difficulty < required_difficulty:
+                self.increase_difficulty()
+
+        self.refresh_screen()
+
+    def increase_difficulty(self):
+        for clicker in self.screens["game"].autoclickers:
+            clicker.pubThread.increase_difficulty()
+
+        self.song_engine.set_difficulty(self.screens["game"].autoclickers[0].pubThread.difficulty)
+
+    def decrease_difficulty(self):
+        if self.score > self.song_engine.max_combo:
+            self.song_engine.max_combo = self.score
+            print("Reached new combo highscore!")
 
         self.score = 0
         for clicker in self.screens["game"].autoclickers:
-            self.score += 15 * clicker.score
+            clicker.pubThread.decrease_difficulty()
 
-        self.screens['game'].show()
+        self.song_engine.set_difficulty(self.screens["game"].autoclickers[0].pubThread.difficulty)
+
+    def refresh_screen(self):
+        self.active_screen.show()
 
     def reset(self):
         self.running = False
-        self.score = 0
-        self.prog_bar_thread.stop()
+        self.reset_score()
+
+        pygame.mixer.music.fadeout(2000)
+
+        if self.active_game == 'combo game':
+            pass
+        elif self.active_game == 'normal game':
+            self.prog_bar_thread.stop()
+            pass
+
         for clicker in self.screens["game"].autoclickers:
             clicker.reset()
 
-        if not self.simActive:
+        if not self.simActive and self.rclpy_initialized:
             rclpy.shutdown()
             self.rclpy_initialized = False
+
+        self.active_game = None
+
+    def reset_score(self):
+        self.reaction_times = {0: [], 1: [], 2: []}
+        self.score = 0
+
+
+class BtnHandler:
+    def __init__(self, win):
+        self.win = win
+
+    'Screen navigation buttons'
+
+
+    def __move_to_game(self):
+        '''
+        move to game screen
+        normal - move to song choice
+        combo - move to gym
+
+        :return:
+        '''
+        'Ensure a player from the database is selected'
+        if not self.win.db.playerLoaded:
+            self.btn_change_user()
+            return
+
+        if self.win.active_game == 'normal game':
+            screenName = "song_choice"
+        elif self.win.active_game == 'combo game':
+            screenName = "combo_game"
+            self.win.start_game()
+
+        self.win.activate_screen(screenName)
+
+
+    def btn_move_to_customization_screen(self):
+        self.win.activate_screen("customization")
+
+    def btn_return_to_main(self):
+        self.win.activate_screen("main")
+
+    def btn_change_user(self):
+        self.win.user_list = ListGenerator(self.win, self.win.db)
+        self.win.user_list.make_change_user_list()
+        self.win.user_list.show()
+
+    def btn_change_difficulty(self):
+        self.win.user_list = ListGenerator(self.win, self.win.db)
+        self.win.user_list.make_list("difficulty")
+        self.win.user_list.show()
+
+    def btn_instructions(self):
+        self.win.activate_screen("instructions")
+
+    def btn_exit(self):
+        button_reply = QMessageBox.question(self.win, 'PyQt5 message', "Exit the application?",
+                                            QMessageBox.Yes | QMessageBox.No, defaultButton=QMessageBox.Yes)
+
+        if button_reply == QMessageBox.Yes:
+            sys.exit()
+
+    def btn_pause_game(self):
+        if self.win.paused:
+            pygame.mixer.music.unpause()
+        else:
+            pygame.mixer.music.pause()
+
+        self.win.paused = not self.win.paused
+
+    def btn_stop_game(self):
+        self.win.activate_screen("score")
+        self.win.db.update_score(self.win.song_engine.song_name, self.win.score)  # attempt to update based on currently active player
+        self.win.reset()
+
+    'Song buttons'
+    def btn_move_to_song_choice_screen(self):
+        self.win.active_game = 'normal game'
+        self.__move_to_game()
+
+    def btn_play_one_kiss(self):
+        song_name = "one_kiss"
+
+        self.win.song_engine = NormalSongEngine(SONGS_PATH, song_name)
+        self.win.start_game()
+
+    def btn_play_cant_help_falling_in_love(self):
+        song_name = "cant_help_falling_in_love"
+
+        self.win.song_engine = NormalSongEngine(SONGS_PATH, song_name)
+        self.win.start_game()
+
+    def btn_move_to_combo_game_screen(self):
+        self.win.active_game = 'combo game'
+
+        song_name = "upbeat_trans_music"
+        # song_name = "cant_help_falling_in_love"
+        self.win.song_engine = ComboSongEngine(SONGS_PATH, song_name)
+        self.__move_to_game()
 
 
 def launch_game():

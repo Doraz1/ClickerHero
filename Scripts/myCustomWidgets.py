@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QWidget, QSizePolicy, QVBoxLayout
 from PyQt5.QtGui import QColor, QPainter, QBrush, QPen
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
-from Scripts.threads import ACNavBlinkThread, ACMoveThread
+from Scripts.threads import LEDNavPubThread, ACMoveThread
 from Scripts.threads import Ros2QTSubscriber
 
 
@@ -17,13 +17,12 @@ class AutoClicker(QWidget):
         self.win = win
         self.ind = ind
         self.animation = AutoClickerAnimation(self, self.ind)
-        self.score = 0
         self.x = 0
         self.y = 0
         self.clicked = False
 
         'LED + navigation thread'
-        self.blinkNavThread = ACNavBlinkThread(self.win, self)
+        self.pubThread = LEDNavPubThread(self.win, self)
 
         'Movement thread - only for on-screen animations'
         self.MoveThread = ACMoveThread(self.win, self) # both for sim and real, in real it's camera locations fed into the animation locations
@@ -50,13 +49,10 @@ class AutoClicker(QWidget):
 
         self.animation.move(x, y)
 
-    def reset_blink(self):
-        self.animation.reset_blink()
-
     def start_threads(self):
         if self.win.DEBUG:
             print("Starting threads")
-        self.blinkNavThread.start()
+        self.pubThread.start()
         self.MoveThread.start()
 
         if not self.win.simActive:
@@ -66,8 +62,6 @@ class AutoClicker(QWidget):
             pass
 
     def reset(self):
-        self.score = 0
-
         # reset threads
         if self.win.simActive:
             self.reset_blink()  # simulated blink
@@ -75,7 +69,10 @@ class AutoClicker(QWidget):
             self.rosSubscriberThread.stop()
 
         self.MoveThread.stop()  # animation movement - in sim it's ant movement, in non-sim it's cam locations
-        self.blinkNavThread.stop()
+        self.pubThread.stop()
+
+    def reset_blink(self):
+        self.animation.reset_blink()
 
 
 class AutoClickerAnimation(QWidget):

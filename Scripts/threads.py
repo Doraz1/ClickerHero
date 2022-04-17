@@ -5,7 +5,7 @@ import numpy as np
 import pyautogui
 
 
-class ACNavBlinkThread(QThread):
+class LEDNavPubThread(QThread):
     '''
         publisher engine (real time and simulation).
         Sends light commands to LED publisher based on notes
@@ -19,17 +19,12 @@ class ACNavBlinkThread(QThread):
         self.win = win
         self.clicker = clicker
         self.ind = self.clicker.ind
-        self.difficulty = self.win.db.get_parameter("difficulty")  # either 1, 2, or 3
-        self.notes = self.win.song_engine.notes[self.ind]
-        self.note_times = self.win.song_engine.note_times
-        self.moves_x, self.moves_rz = self.win.song_engine.moves[self.ind]
 
         if self.win.DEBUG:
             print("creating blink thread and starting")
 
         if not self.win.simActive:
             self.ros_publisher = QT2RosPublisher(self.ind) # ROS node
-
             self.LED_msg.connect(self.ros_publisher.run_led_publisher)
             self.nav_msg.connect(self.ros_publisher.run_nav_publisher)
         else:
@@ -37,73 +32,115 @@ class ACNavBlinkThread(QThread):
 
             'Move like ants instead. No point in simulating real life commands.'
             # self.nav_msg.connect(self.LED_publisher.run_nav_publisher)
-
+        self.difficulty = 1
         self.threadactive = False
+        self.last_note_time = -1
+
+    def set_difficulty(self, dif):
+        if 1 <= dif <= 10:
+            self.difficulty = dif
+        else:
+            raise Exception("invalid difficulty level")
+
+    def increase_difficulty(self):
+        if self.difficulty < 10:
+            self.difficulty += 1
+            print(f"updated clicker dif to {self.difficulty}")
+
+    def decrease_difficulty(self):
+        if self.difficulty > 1:
+            self.difficulty -= 1
+            print(f"updated clicker dif to {self.difficulty}")
 
     def run(self):
         self.threadactive = True
         try:
-            #region Initialize clicker moves and notes for song
-            t0 = time.time() - self.win.song_engine.start_from_second
-            self.win.song_t0 = t0
-
-            note_times = self.note_times
-            notes = self.notes
-            moves_x, moves_rz = self.moves_x, self.moves_rz
-
-            'Get first note index'
-            first_note_ind = next(i for i in range(len(note_times)) if note_times[i] > time.time() - t0)
-            # note_times = [note_times[i] - self.win.song_engine.start_from_second for i in range(len(note_times))
-            #               if i >= first_note_ind]
-            notes = [nt for nt in notes if nt > first_note_ind]
-            next_note_ind = notes.pop(0)
-
-            iteration = 1 + first_note_ind
-            print(f"t0: {self.win.song_engine.start_from_second}")
-            print(f"note_times: {note_times[first_note_ind:]}")
-            print(f"iteration: {iteration}")
-            print(f"first_note_ind: {first_note_ind}")
-            print(f"notes: {notes}")
-            print(f"next_note_ind: {next_note_ind}")
-            #endregion
-
-            while self.win.running and self.threadactive:
-                'Sleep till note time'
-                time_to_sleep = t0 - time.time() + note_times[iteration]
-                time.sleep(time_to_sleep)
-                self.play_notes(next_note_ind, iteration)
-
-                if iteration == next_note_ind:
-                    'Played note'
-                    next_note_ind = notes.pop(0) if notes else -1  # get note from list if list isn't empty
-
-                self.move_robot(moves_x[iteration], moves_rz[iteration])
-                iteration += 1
+            if self.win.active_game == 'normal game':
+                self.run_normal_game()
+            elif self.win.active_game == 'combo game':
+                self.run_combo_game()
 
         except Exception as e:
             print(e)
             exit(4)
 
+    def run_normal_game(self):
+        # region Initialize clicker moves and notes for song
+        t0 = time.time() - self.win.song_engine.start_from_second
+        self.win.song_t0 = t0
+
+        note_times = self.win.song_engine.note_times
+        notes = self.win.song_engine.notes[self.ind]
+        moves_x, moves_rz = self.win.song_engine.moves[self.ind]
+
+        'Get first note index'
+        first_note_ind = next(i for i in range(len(note_times)) if note_times[i] > time.time() - t0)
+        # note_times = [note_times[i] - self.win.song_engine.start_from_second for i in range(len(note_times))
+        #               if i >= first_note_ind]
+        notes = [nt for nt in notes if nt > first_note_ind]
+        next_note_ind = notes.pop(0)
+
+        iteration = 1 + first_note_ind
+        print(f"t0: {self.win.song_engine.start_from_second}")
+        print(f"note_times: {note_times[first_note_ind:]}")
+        print(f"iteration: {iteration}")
+        print(f"first_note_ind: {first_note_ind}")
+        print(f"notes: {notes}")
+        print(f"next_note_ind: {next_note_ind}")
+        # endregion
+
+        while self.win.running and self.threadactive:
+            'Sleep till note time'
+            time_to_sleep = t0 - time.time() + note_times[iteration]
+            time.sleep(time_to_sleep)
+            self.play_notes(next_note_ind, iteration)
+
+            if iteration == next_note_ind:
+                'Played note'
+                next_note_ind = notes.pop(0) if notes else -1  # get note from list if list isn't empty
+
+            self.move_robot(moves_x[iteration], moves_rz[iteration])
+            iteration += 1
+
+    def run_combo_game(self):
+        t0 = time.time()
+        self.win.song_t0 = t0
+        while self.win.running and self.threadactive:
+            notes, moves = self.win.song_engine.generate_commands()
+            for (sign, TOn, TOff) in notes:
+                'Sleep till note time'
+                self.cipher_and_play(1, self.difficulty, sign=sign)
+                time.sleep(TOn)
+
+                self.cipher_and_play(0, self.difficulty)
+                time.sleep(TOff)
+
     def play_notes(self, next_note, iteration):
         'Play notes'
+        played_note = False
         if next_note == iteration:
+            played_note = True
             # print(f"Playing note {next_note} on time {time.time() - t0}")
             # if self.win.DEBUG:
-            if True:
-                print(f"Turning LED on! dif: {self.difficulty}")
 
             if self.win.simActive:
                 activate_LED_thread = Thread(target=self.clicker.animation.activateLEDs)
                 activate_LED_thread.start()  # blink in separate background thread
             else:
-                # currentCmd = self.LED_publisher.currCmd
-                self.LED_msg.emit(self.difficulty * 10 + 1)  # emits to LED publisher
+                self.cipher_and_play(1, self.difficulty)
         else:
             if self.win.simActive:
                 pass
             else:
-                self.LED_msg.emit(self.difficulty * 10 + 0)  # emits to LED publisher
-        return next_note == iteration
+                self.cipher_and_play(0, self.difficulty)
+
+        return played_note
+
+    def cipher_and_play(self, state, difficulty, sign=1):
+        'sign: 1 = green, -1 = red'
+        led = difficulty*10 + state*1
+        self.LED_msg.emit(sign * led)  # emits to LED publisher
+        self.win.time_note_played[self.ind] = time.time() - self.win.song_t0
 
     def move_robot(self, x_cmd, rz_cmd):
         if not self.win.DEBUG:
@@ -291,7 +328,7 @@ class ProgressBarThread(QThread):
         while self.win.running:
             if self.music.get_pos() == -1:
                 # song finished running
-                self.win.btn_stop_game()
+                # self.win.btn_stop_game()
                 return
 
             curr_progress = self.music.get_pos() / 1000  # in seconds
@@ -373,10 +410,13 @@ class SubscriberNode(Node):
 
         # print(f"my led state msg: {msg.data}")
         self.clicked_state = msg.data
-
-        if self.clicked_state == 2 and prev_clicked_state == 1:
+        if self.clicked_state == 2 and prev_clicked_state != 2:
             'Clicked when LED was lit up'
-            self.win.screens["game"].autoclickers[self.ind].score += 1
+            curr_time = time.time() - self.win.song_t0
+            self.win.update_score(self.ind, curr_time)
+        if self.clicked_state == -1:
+            # wrong click in inhibition game - reset combo
+            self.win.decrease_difficulty()
 
     def stop(self):
         self.tf_subscriber.destroy()
@@ -451,6 +491,7 @@ class QT2RosPublisher(QThread):
 
     def run_led_publisher(self, cmd):
         self.publisher.publish_led_command(cmd)
+        print(f"publishing led command: {cmd}")
         self.curr_LED_cmd = cmd
 
     def run_nav_publisher(self, x, rz):

@@ -27,6 +27,7 @@ class PlayerDataBase():
                          3: 'difficulty INTEGER',
                          4: 'one_kiss_score FLOAT',
                          5: 'cant_help_falling_in_love_score FLOAT',
+                         6: 'upbeat_trans_music_score FLOAT'
                          }
         query = f"""CREATE TABLE IF NOT EXISTS {self.topic} 
                     (
@@ -35,7 +36,8 @@ class PlayerDataBase():
                     {self.sql_dict[2]},
                     {self.sql_dict[3]},
                     {self.sql_dict[4]},
-                    {self.sql_dict[5]}
+                    {self.sql_dict[5]},
+                    {self.sql_dict[6]}
                     )"""
 
         self.__execute_query(query)
@@ -59,7 +61,6 @@ class PlayerDataBase():
         if rows:
             user = rows[0] # get first user found
             firstNameInd = searchDict(self.sql_dict, 'first_name')
-            print(f"first nam ind: {firstNameInd}")
             self.firstName = user[0]
             self.lastName = user[1]
             self.age = user[2]
@@ -89,7 +90,7 @@ class PlayerDataBase():
                   "Creating new player!\n"
                   "---------------------------------")
             query = f"""INSERT INTO  {self.topic}  VALUES
-                        ('{firstName}', '{lastName}', {age}, 1, 0.0, 0.0 )"""
+                        ('{firstName}', '{lastName}', {age}, 1, 0.0, 0.0, 0.0)"""
 
             self.__execute_query(query)
 
@@ -102,7 +103,6 @@ class PlayerDataBase():
     def update_score(self, song_name, new_score):
         first_name = self.firstName
         last_name = self.lastName
-
         'Get current score'
         query = f"""SELECT {song_name}_score FROM {self.topic}
                WHERE first_name = '{first_name}' AND last_name = '{last_name}'"""
@@ -178,7 +178,7 @@ class PlayerDataBase():
 
 
 class ListGenerator(QWidget):
-    params_dict = {"difficulty": {1, 2, 3},
+    params_dict = {"difficulty": {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
                    "saver": {0, 1}}
     font = QFont('Times', 45, QFont.Bold)
 
@@ -282,6 +282,8 @@ class db_facade:
 
         self.db.insert(playerFirstName, playerLastName, playerAge)
         self.__loadPlayer(playerFirstName, playerLastName)
+        self.listGenScreen.win.refresh_screen()
+        self.listGenScreen.close()
 
     def loadPlayerFromList(self):
         chosen_players_str = self.listGenScreen.listWidget.currentItem().text()
