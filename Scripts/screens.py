@@ -34,8 +34,8 @@ class Screen:
 
     #start button style
     start_btn_bg_color = "(150, 180, 255, 0.9)"
-    start_btn_width = 550
-    start_btn_dx = 275
+    start_btn_width = 580
+    start_btn_dx = 290
 
     def __init__(self, win, name):
         self.win = win
@@ -141,7 +141,8 @@ class MainScreen(Screen):
         button_start_normal = QPushButton(self.win)
 
         'Start normal game'
-        self.stylize_start_btn(button_start_normal, btn_x - self.start_btn_dx, btn_y, self.win.btnHandler.btn_move_to_song_choice_screen,
+        st_btn_x = (int(self.win.width - self.start_btn_width)/2)
+        self.stylize_start_btn(button_start_normal, st_btn_x - self.start_btn_dx, btn_y, self.win.btnHandler.btn_move_to_song_choice_screen,
                                "התחל משחק קצב")
         # button_start.setShortcut('Return')  # shortcut key
         button_start_normal.setToolTip("Start playing normal game")  # Tool tip
@@ -149,7 +150,7 @@ class MainScreen(Screen):
 
         'Start inhibition game'
         button_start_inhib = QPushButton(self.win)
-        self.stylize_start_btn(button_start_inhib, btn_x + self.start_btn_dx, btn_y, self.win.btnHandler.btn_move_to_combo_game_screen,
+        self.stylize_start_btn(button_start_inhib, st_btn_x + self.start_btn_dx, btn_y, self.win.btnHandler.btn_move_to_combo_game_screen,
                                "התחל משחק קומבו")
         # button_start.setShortcut('Return')  # shortcut key
         button_start_inhib.setToolTip("Start playing inhibition game")  # Tool tip
@@ -387,8 +388,8 @@ class NormalGameScreen(Screen):
 
         self.progress_bar.show()
 
-        for clicker in self.autoclickers:
-            clicker.animation.show()
+        # for clicker in self.autoclickers:
+        #     clicker.animation.show()
 
         curr_score = self.win.score
         self.labels[1].setText(f"Score: {curr_score}")  # score label

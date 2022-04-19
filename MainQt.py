@@ -180,10 +180,10 @@ class MyWindow(QMainWindow):
         self.reaction_times[clicker_ind].append(reaction_time)
         # print(f"logged reaction time: {round(reaction_time, 2)}[s] since note time is {note_time} and clicktime is {click_time}")
         if self.active_game == 'normal game':
-            self.score += round(1 / reaction_time, 1)  # score based on reaction time
+            self.score += int(10 / reaction_time)  # score based on reaction time
         elif self.active_game == 'combo game':
             self.score += 1
-            difficulty_incr_thresh = 2
+            difficulty_incr_thresh = 1
             required_difficulty = 1 + int(self.score / difficulty_incr_thresh)
             print(f"curr score: {self.score} req dif: {required_difficulty}")
             if self.song_engine.difficulty < required_difficulty:

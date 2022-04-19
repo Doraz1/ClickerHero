@@ -33,7 +33,8 @@ class NormalSongEngine:
         if self.song_name == 'one_kiss':
             phase_list = [(0, 123.85)]
         elif self.song_name == 'cant_help_falling_in_love':
-            phase_list = [(0.17, 67.1), (65, 67.1), (79, 67.1)]
+            bpm = 67.12
+            phase_list = [(0.17, bpm), (65, bpm), (81, bpm), (111, bpm)]
         else:
             phase_list = [(0, 123)]
 
@@ -91,11 +92,11 @@ class NormalSongEngine:
             init_note = 1
 
             start = silence(init_note)
-            ac1_ph1 = start + on_beat(16)
-            ac2_ph1 = start + silence(2) + on_beat(16)
-            ac3_ph1 = start + silence(4) + on_beat(16)
+            ac1_ph1 = on_beat(16)
+            ac2_ph1 = silence(2) + on_beat(16)
+            ac3_ph1 = silence(4) + on_beat(16)
 
-            ac1_notes = get_node_indices(ac1_ph1)
+            ac1_notes = get_node_indices(start + ac1_ph1)
             ac2_notes = get_node_indices(ac2_ph1)
             ac3_notes = get_node_indices(ac3_ph1)
 
@@ -107,29 +108,25 @@ class NormalSongEngine:
             start = silence(9)
             ph1_struct = on_beat(1) + silence(4)
 
-            ac1_ph1 = start + repeat(ph1_struct, ph1_len)
+            ac1_ph1 = repeat(ph1_struct, ph1_len)
             ac2_ph1 = start + silence(2) + repeat(ph1_struct, ph1_len)
             ac3_ph1 = start + silence(4) + repeat(ph1_struct, ph1_len)
 
             'Phase 2'
-            start_2 = silence(1)
-
-            ac1_ph2 = start_2 + on_beat(5)
-            ac2_ph2 = start_2 + silence(4) + on_beat(1) + silence(3) + single_beat(1)
-            ac3_ph2 = start_2 + silence(8) + on_beat(1) + silence(3) + single_beat(1)
+            ac1_ph2 = on_beat(5)
+            ac2_ph2 = silence(4) + on_beat(1) + silence(3) + single_beat(1)
+            ac3_ph2 = silence(8) + on_beat(1) + silence(3) + single_beat(1)
 
             'Phase 3'
-            ph3_len = 8
-            start_3 = silence(1)
-
-            ac1_ph3 = start_3 + repeat(ph1_struct, ph3_len)
-            ac2_ph3 = start_3 + silence(2) + repeat(ph1_struct, ph3_len)
-            ac3_ph3 = start_3 + silence(4) + repeat(ph1_struct, ph3_len)
+            # ph3_len = 8
+            # ac1_ph3 = repeat(ph1_struct, ph3_len)
+            # ac2_ph3 = silence(2) + repeat(ph1_struct, ph3_len)
+            # ac3_ph3 = silence(4) + repeat(ph1_struct, ph3_len)
 
             'Construct full note list'
-            ac1_notes = get_node_indices(ac1_ph1 + ac1_ph2 + ac1_ph3)
-            ac2_notes = get_node_indices(ac2_ph1 + ac2_ph2 + ac2_ph3)
-            ac3_notes = get_node_indices(ac3_ph1 + ac3_ph2 + ac3_ph3)
+            ac1_notes = get_node_indices(start + ac1_ph1 + silence(1) + ac1_ph2 + ac1_ph1)
+            ac2_notes = get_node_indices(start + ac1_ph1 + silence(1) + ac1_ph2 + ac1_ph1 + ac1_ph1)
+            ac3_notes = get_node_indices(start + ac1_ph1 + silence(1) + ac1_ph2 + ac1_ph1 + ac1_ph1)
         else:
             print("no such song!")
             tmp = on_beat(1) + silence(4)
@@ -144,7 +141,7 @@ class NormalSongEngine:
         return notes
 
     def get_autoclicker_moves(self, note_times):
-        turn_speed = 0.92
+        turn_speed = 0.9
         march_speed = 0.06
         def cmd(command, reps):
             if reps == 0:
@@ -234,16 +231,16 @@ class NormalSongEngine:
             ph1_struct = decipher(half_line_forward() + stop(8) + half_line_back() + stop(8))  # turn it into a list of 2 elements - x command and rz command
             # each struct is 32 beats long
             # first phase is 73 beats long
-            ac1_ph1 = start + repeat(ph1_struct[0], ph1_struct[1], 2)
-            ac2_ph1 = start + repeat(ph1_struct[0], ph1_struct[1], 23)
-            ac3_ph1 = start + repeat(ph1_struct[0], ph1_struct[1], 23)
+            ac1_ph1 = repeat(ph1_struct[0], ph1_struct[1], 2)
+            ac2_ph1 = repeat(ph1_struct[0], ph1_struct[1], 23)
+            ac3_ph1 = repeat(ph1_struct[0], ph1_struct[1], 23)
 
-            start_ph2 = stop(1)
-            ac1_ph2 = start_ph2 + half_circle(16) + stop(2)
+            ac1_ph2 = half_circle(16) + stop(4)
+            ac1_ph3 = repeat(ph1_struct[0], ph1_struct[1], 1)
 
-            ac1_moves = decipher(ac1_ph1 + ac1_ph2 + ac1_ph1)
-            ac2_moves = decipher(ac2_ph1 + ac1_ph2 + ac1_ph1)
-            ac3_moves = decipher(ac3_ph1 + ac1_ph2 + ac1_ph1)
+            ac1_moves = decipher(start + ac1_ph1 + stop(1) + ac1_ph2 + ac1_ph3 + ac1_ph2 + ac1_ph1)
+            ac2_moves = decipher(start + ac2_ph1 + ac1_ph2 + ac1_ph1)
+            ac3_moves = decipher(start + ac3_ph1 + ac1_ph2 + ac1_ph1)
         else:
             print("no such song!")
             start = stop(1)
@@ -279,14 +276,14 @@ class ComboSongEngine:
         self.max_combo = 0
         self.difficulty_dict = {
             1: {"avg_TOff": 5, "prob_green": 1},
-            2: {"avg_TOff": 4, "prob_green": 1},
-            3: {"avg_TOff": 3.5, "prob_green": 0.9},
-            4: {"avg_TOff": 3.5, "prob_green": 0.85},
-            5: {"avg_TOff": 3, "prob_green": 0.85},
-            6: {"avg_TOff": 2.5, "prob_green": 0.8},
-            8: {"avg_TOff": 2.5, "prob_green": 0.7},
-            9: {"avg_TOff": 2, "prob_green": 0.7},
-            10: {"avg_TOff": 1.8, "prob_green": 0.7},
+            2: {"avg_TOff": 4, "prob_green": 0.9},
+            3: {"avg_TOff": 3.5, "prob_green": 0.8},
+            4: {"avg_TOff": 3.5, "prob_green": 0.75},
+            5: {"avg_TOff": 3, "prob_green": 0.65},
+            6: {"avg_TOff": 2.5, "prob_green": 0.6},
+            8: {"avg_TOff": 2.5, "prob_green": 0.55},
+            9: {"avg_TOff": 2, "prob_green": 0.5},
+            10: {"avg_TOff": 1.8, "prob_green": 0.5},
         }
         self.steps_per_lvl = 10
         self.start_from_second = 0
@@ -313,12 +310,12 @@ class ComboSongEngine:
         variance = 0.2
 
         signs = np.random.choice([1, -1], self.steps_per_lvl, p=[p, 1 - p])  # choose color - green or red
-        preset_on_time = 2
+        preset_on_time = 3
         TOn = preset_on_time*np.ones(self.steps_per_lvl)
         TOff = np.random.uniform(avg_TOff-variance, avg_TOff + variance, self.steps_per_lvl)
         notes = zip(signs, TOn, TOff)
 
-        return notes
+        return list(notes)
 
     def generate_moves(self):
         moves = []

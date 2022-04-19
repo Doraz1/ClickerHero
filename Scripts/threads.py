@@ -3,7 +3,7 @@ from PyQt5.QtCore import QThread
 import time
 import numpy as np
 import pyautogui
-
+from threading import Timer
 
 class LEDNavPubThread(QThread):
     '''
@@ -46,11 +46,13 @@ class LEDNavPubThread(QThread):
         if self.difficulty < 10:
             self.difficulty += 1
             print(f"updated clicker dif to {self.difficulty}")
+        self.win.refresh_screen()
 
     def decrease_difficulty(self):
         if self.difficulty > 1:
             self.difficulty -= 1
             print(f"updated clicker dif to {self.difficulty}")
+        self.win.refresh_screen()
 
     def run(self):
         self.threadactive = True
@@ -94,20 +96,29 @@ class LEDNavPubThread(QThread):
             time_to_sleep = t0 - time.time() + note_times[iteration]
             time.sleep(time_to_sleep)
             self.play_notes(next_note_ind, iteration)
-
-            if iteration == next_note_ind:
+            if not notes:
+                'List isnt empty'
+                next_note_ind = 200
+            elif iteration == next_note_ind:
                 'Played note'
-                next_note_ind = notes.pop(0) if notes else -1  # get note from list if list isn't empty
+                next_note_ind = notes.pop(0)
 
-            self.move_robot(moves_x[iteration], moves_rz[iteration])
+            self.move_robot(moves_x, moves_rz, iteration)
             iteration += 1
 
     def run_combo_game(self):
         t0 = time.time()
         self.win.song_t0 = t0
+
         while self.win.running and self.threadactive:
             notes, moves = self.win.song_engine.generate_commands()
-            for (sign, TOn, TOff) in notes:
+            print(f"new notes: {notes}")
+            prev_difficulty = self.difficulty
+            for sign, TOn, TOff in notes:
+                if prev_difficulty != self.difficulty:
+                    print("sensed dif change")
+                    break
+
                 'Sleep till note time'
                 self.cipher_and_play(1, self.difficulty, sign=sign)
                 time.sleep(TOn)
@@ -142,12 +153,16 @@ class LEDNavPubThread(QThread):
         self.LED_msg.emit(sign * led)  # emits to LED publisher
         self.win.time_note_played[self.ind] = time.time() - self.win.song_t0
 
-    def move_robot(self, x_cmd, rz_cmd):
-        if not self.win.DEBUG:
+    def move_robot(self, x_cmds, rz_cmds, iter):
+        if len(x_cmds) >= iter and len(rz_cmds) >= iter:
+            x_cmd = x_cmds[iter]
+            rz_cmd = rz_cmds[iter]
             if (x_cmd != 0.0) or (rz_cmd != 0.0):
-                print(f"Sending commands (x, rz) = {x_cmd, rz_cmd}")
+                print(f"t = {round(time.time() - self.win.song_t0, 3)}. Sending commands (x, rz) = {x_cmd, rz_cmd}")
 
-        self.nav_msg.emit(x_cmd, rz_cmd)
+            self.nav_msg.emit(x_cmd, rz_cmd)
+        else:
+            self.nav_msg.emit(0.0, 0.0)
         # endregion
 
     def stop(self):
@@ -371,6 +386,11 @@ class SubscriberNode(Node):
 
         # self.subscription  # prevent unused variable warning
 
+    # def start_clicked_simulator(self):
+    #     while self.win.running:
+    #         self.clicked_sim_timer = Timer(1, self.clicked_listener_callback, [0])
+    #         self.clicked_sim_timer.start()
+
     def tf_listener_callback(self, msg):
         header = msg.transforms[0].header
         translations = msg.transforms[0].transform.translation # x, y, z 3D vector
@@ -406,17 +426,44 @@ class SubscriberNode(Node):
         #                 w=0.7030051946640015)))])
 
     def clicked_listener_callback(self, msg):
+        if self.win.active_game == 'normal game':
+            self.normal_clicked_cb(msg)
+        elif self.win.active_game == 'combo game':
+            self.combo_clicked_cb(msg)
+
+    def normal_clicked_cb(self, msg):
         prev_clicked_state = self.clicked_state
+        self.clicked_state = msg.data
 
         # print(f"my led state msg: {msg.data}")
+        if prev_clicked_state == 1:
+            if self.clicked_state == 2:
+                'Clicked when LED was lit up'
+                curr_time = time.time() - self.win.song_t0
+                self.win.update_score(self.ind, curr_time)
+
+    def combo_clicked_cb(self, msg):
+        prev_clicked_state = self.clicked_state
         self.clicked_state = msg.data
-        if self.clicked_state == 2 and prev_clicked_state != 2:
-            'Clicked when LED was lit up'
-            curr_time = time.time() - self.win.song_t0
-            self.win.update_score(self.ind, curr_time)
-        if self.clicked_state == -1:
-            # wrong click in inhibition game - reset combo
-            self.win.decrease_difficulty()
+
+        # print(f"my led state msg: {msg.data}")
+        if prev_clicked_state == 1:
+            if self.clicked_state == 2:
+                'Clicked when LED was lit up'
+                curr_time = time.time() - self.win.song_t0
+                self.win.update_score(self.ind, curr_time)
+            else:
+                'missed a click'
+                self.win.decrease_difficulty()
+        if prev_clicked_state == -1:
+            if self.clicked_state == -2:
+                # wrong click in inhibition game - reset combo
+                print("clicked on a red")
+                self.win.decrease_difficulty()
+            else:
+                'Avoided clicking red'
+                curr_time = time.time() - self.win.song_t0
+                self.win.update_score(self.ind, curr_time)
 
     def stop(self):
         self.tf_subscriber.destroy()
@@ -491,7 +538,6 @@ class QT2RosPublisher(QThread):
 
     def run_led_publisher(self, cmd):
         self.publisher.publish_led_command(cmd)
-        print(f"publishing led command: {cmd}")
         self.curr_LED_cmd = cmd
 
     def run_nav_publisher(self, x, rz):
