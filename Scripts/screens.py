@@ -23,13 +23,13 @@ class Screen:
     # Button style
     btn_color = "(100, 100, 255, 0.8)"
     btn_initial_y = 250
-    btn_width = 700
+    btn_width = 730
     btn_height = 140
-    btn_margin_x = 30
+    btn_margin_x = 50
     btn_margin_y = 50
     btn_text_color = "(240, 240, 240, 1.0)"
     btn_bg_color = "(100, 100, 255, 0.9)"
-    btn_text_font = QFont('Times', 25, QFont.Bold)
+    btn_text_font = QFont('Times', 45, QFont.Bold)
     btn_opacity = 30
 
     #start button style
@@ -125,7 +125,7 @@ class MainScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "BG_main.jpg"
+        bg_image_path = ASSET_PATH + "mic_bg.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -190,7 +190,7 @@ class CustomizationScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "BG_main.jpg"
+        bg_image_path = ASSET_PATH + "mic_bg.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -222,7 +222,7 @@ class InstructionsScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "BG_main.jpg"
+        bg_image_path = ASSET_PATH + "mic_bg.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -252,21 +252,21 @@ class InstructionsScreen(Screen):
         self.buttons.append(button_return_to_main)
 
 
-class SecondScreen(Screen):
+class SongChoiceScreen(Screen):
     # song choice label style
     song_choice_lbl_width = 310
     song_choice_lbl_text_font = QFont('Times', 20, QFont.Bold)
     song_choice_lbl_text_color = "(180, 180, 255, 1.0)"
-    song_choice_lbl_margin_y = 80
+    song_choice_lbl_margin_y = 100
 
     def __init__(self, win, name):
-        super(SecondScreen, self).__init__(win, name)
+        super(SongChoiceScreen, self).__init__(win, name)
         self.create_screen()
         self.hide()
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "BG_sec.jpg"
+        bg_image_path = ASSET_PATH + "violin_bg.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -344,7 +344,7 @@ class NormalGameScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "BG_game.jpg"
+        bg_image_path = ASSET_PATH + "violin_bg.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -412,7 +412,7 @@ class ComboGameScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "gym.jpg"
+        bg_image_path = ASSET_PATH + "guitar_bg.jpg"
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)
         self.labels.append(bg_label)
@@ -437,13 +437,12 @@ class ComboGameScreen(Screen):
         max_score_lbl_height = score_lbl_height + self.lbl_height
         label_max_score = QLabel(self.win)
         self.stylize_lbl(label_max_score, int((self.win.width - self.lbl_width) / 2), max_score_lbl_height, f"שיא נוכחי: {-1}")
-        label_max_score.setFont(QFont('MV Boli', 40, QFont.Bold))
+        # label_max_score.setFont(QFont('MV Boli', 40, QFont.Bold))
         self.labels.append(label_max_score)
 
         dif_lbl_height = max_score_lbl_height + self.lbl_height
         label_curr_difficulty = QLabel(self.win)
         self.stylize_lbl(label_curr_difficulty, int((self.win.width - self.lbl_width) / 2), dif_lbl_height, f"רמת קושי: {-1}")
-        label_curr_difficulty.setFont(QFont('MV Boli', 40, QFont.Bold))
         self.labels.append(label_curr_difficulty)
 
     def show(self):
@@ -472,7 +471,7 @@ class ScoreScreen(Screen):
 
     def create_screen(self):
         # Background
-        bg_image_path = ASSET_PATH + "BG_score.jpg"
+        bg_image_path = ASSET_PATH + "sky_bg.jpg"
 
         bg_label = QLabel(self.win)
         self.create_background(bg_label, bg_image_path)

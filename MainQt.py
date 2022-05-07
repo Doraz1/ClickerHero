@@ -71,7 +71,7 @@ class MyWindow(QMainWindow):
         main_screen = MainScreen(self, "Main Menu Screen")
         customization_screen = CustomizationScreen(self, "Customization Screen")
         instructions_screen = InstructionsScreen(self, "Instructions Screen")
-        secondary_screen = SecondScreen(self, "Song choice Screen")
+        secondary_screen = SongChoiceScreen(self, "Song choice Screen")
         combo_game_screen = ComboGameScreen(self, "Combo game Screen")
         game_screen = NormalGameScreen(self, "Game Screen")
         score_screen = ScoreScreen(self, "Score Screen")
